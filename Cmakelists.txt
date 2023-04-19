@@ -1,0 +1,12 @@
+cmake_minimum_required(VERSION 3.10)
+
+project(Simderella)
+
+find_package(SDL2 CONFIG REQUIRED)
+
+set(SOURCES
+    "main.c"
+)
+
+add_executable(main ${SOURCES})
+target_link_libraries(main PRIVATE SDL2::SDL2main SDL2::SDL2)
