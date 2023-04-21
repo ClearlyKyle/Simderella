@@ -6,7 +6,22 @@ find_package(SDL2 CONFIG REQUIRED)
 
 set(SOURCES
     "main.c"
+    "obj.h"
+    "pgm.h"
 )
 
+# add_library(tinyOBj INTERFACE deps/tinyObj/tinyobj_loader_c.h)
+add_subdirectory(deps/cglm/ EXCLUDE_FROM_ALL)
+
+include_directories("deps/tinyObj")
+
 add_executable(main ${SOURCES})
+
 target_link_libraries(main PRIVATE SDL2::SDL2main SDL2::SDL2)
+target_link_libraries(main PRIVATE cglm_headers)
+
+# target_link_libraries(main PRIVATE tinyOBj)
+# target_include_directories(main PRIVATE deps/tinyObj)
+target_include_directories(main PUBLIC deps/tinyObj)
+
+# target_link_libraries(main PRIVATE deps/tinyObj/tinyobj_loader_c.h)
