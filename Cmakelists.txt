@@ -9,9 +9,11 @@ set(SOURCES
     "obj.h"
     "pgm.h"
     "timer.h"
+    "tex.h"
 )
 
 include_directories("deps/tinyObj")
+include_directories("deps")
 
 add_subdirectory(deps/cglm/ EXCLUDE_FROM_ALL)
 
