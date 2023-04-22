@@ -95,11 +95,36 @@ struct Mesh Initialise_Object(const char *file_name)
     {
         printf("Object has no materials : %s\n", file_name);
     }
+    else
+    {
+        printf("Material : %s\n", materials->name);
+        // float ambient[3];
+        // float diffuse[3];
+        // float specular[3];
+        // float transmittance[3];
+        // float emission[3];
+        // float shininess;
+        // float ior;
+        // float dissolve;
+        // int   illum;
 
-    {                                                             // Print Shape data
-        printf("Shape name         : %s\n", shapes->name);        // o crate_Cube.004
-        printf("Shape face_offset  : %d\n", shapes->face_offset); // offset into tinyobj_attrib_t->faces (starting f value, index)
-        printf("Shape length       : %d\n", shapes->length);      // number of faces for the given shape (f values in .obj)
+        printf("\t map_Ka   ambient_texname            :%s\n", materials->ambient_texname);
+        printf("\t map_Kd   diffuse_texname            :%s\n", materials->diffuse_texname);
+        printf("\t map_Ks   specular_texname           :%s\n", materials->specular_texname);
+        printf("\t map_Ns   specular_highlight_texname :%s\n", materials->specular_highlight_texname);
+        printf("\t map_bump bump_texname               :%s\n", materials->bump_texname);
+        printf("\t disp     displacement_texname       :%s\n", materials->displacement_texname);
+        printf("\t map_d    alpha_texname              :%s\n", materials->alpha_texname);
+    }
+
+    { // Print Shape data
+        printf("Shapes...\n");
+        for (size_t i = 0; i < number_of_shapes; i++)
+        {
+            printf("[%zd]  Shape name         : %s\n", i, shapes[i].name);     // o crate_Cube.004
+            printf("       Shape face_offset  : %d\n", shapes[i].face_offset); // offset into tinyobj_attrib_t->faces (starting f value, index)
+            printf("       Shape length       : %d\n", shapes[i].length);      // number of faces for the given shape (f values in .obj)
+        }
     }
 
     { // Print Attribute data
