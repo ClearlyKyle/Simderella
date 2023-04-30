@@ -2,24 +2,34 @@ cmake_minimum_required(VERSION 3.10)
 
 project(Simderella)
 
+if(MSVC)
+    # warning level 4 and all warnings as errors
+    add_compile_options(/W4)
+endif()
+
 find_package(SDL2 CONFIG REQUIRED)
 
 set(SOURCES
-    "main.c"
-    "obj.h"
-    "pgm.h"
-    "timer.h"
-    "tex.h"
+    "src/graphics.c"
+    "src/graphics.h"
+
+    "src/obj.c"
+    "src/obj.h"
+    "src/raster.c"
+    "src/raster.h"
+
+    "src/tex.h"
+    "src/tex.c"
 )
 
-include_directories("deps/tinyObj")
-include_directories("deps")
+include_directories(deps)
+include_directories(deps/tinyObj)
+include_directories(src)
 
 add_subdirectory(deps/cglm/ EXCLUDE_FROM_ALL)
 
-add_executable(main ${SOURCES})
+add_executable(main main.c ${SOURCES})
 
 target_link_libraries(main PRIVATE SDL2::SDL2main SDL2::SDL2)
 target_link_libraries(main PRIVATE cglm_headers)
-
 target_include_directories(main PUBLIC deps/tinyObj)
