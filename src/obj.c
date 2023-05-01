@@ -54,129 +54,15 @@ static inline const char *tinyobj_parse_error(const int return_value_from_tinyob
     // }
 }
 
-struct Mesh Initialise_Object(const char *file_name)
-{
-    assert(file_name);
-
-    tinyobj_attrib_t attribute;
-
-    tinyobj_shape_t *shapes;
-    size_t           number_of_shapes;
-
-    tinyobj_material_t *materials;
-    size_t              number_of_materials;
-
-    const int ret = tinyobj_parse_obj(&attribute, &shapes, &number_of_shapes, &materials, &number_of_materials, file_name, loadFile, NULL, TINYOBJ_FLAG_TRIANGULATE);
-    if (ret != TINYOBJ_SUCCESS)
-    {
-        fprintf(stderr, "Failed to parse OBJ file : %s : %s\n", tinyobj_parse_error(ret), file_name);
-        exit(1);
-    }
-
-    assert(shapes);
-
-    if (materials == NULL)
-    {
-        printf("Object has no materials : %s\n", file_name);
-    }
-    else
-    {
-        printf("Material : %s\n", materials->name);
-        // float ambient[3];
-        // float diffuse[3];
-        // float specular[3];
-        // float transmittance[3];
-        // float emission[3];
-        // float shininess;
-        // float ior;
-        // float dissolve;
-        // int   illum;
-
-        printf("\t map_Ka   ambient_texname            :%s\n", materials->ambient_texname);
-        printf("\t map_Kd   diffuse_texname            :%s\n", materials->diffuse_texname);
-        printf("\t map_Ks   specular_texname           :%s\n", materials->specular_texname);
-        printf("\t map_Ns   specular_highlight_texname :%s\n", materials->specular_highlight_texname);
-        printf("\t map_bump bump_texname               :%s\n", materials->bump_texname);
-        printf("\t disp     displacement_texname       :%s\n", materials->displacement_texname);
-        printf("\t map_d    alpha_texname              :%s\n", materials->alpha_texname);
-    }
-
-    /*
-    What are "faces"?
-    - In the .obj file there are lines starting with f these are the faces. The format is:
-        vertex_index/texture_index/normal_index
-    for which each index starts at 1 and increases corresponding to the order in which the referenced element was defined
-    the index is then used to get the values from "attributes.vertices[vertex_index]" for example
-    each "face" is a group of "vertex_index/texture_index/normal_index", 3 faces make a triangle
-
-    face_num_verts      - is an array of integers each element corresponds to the number of vertices in a face.
-                            For example, if face_num_verts[i] is equal to 3, then the i-th face is a triangle.
-    num_face_num_verts  - is an integer that specifies the number of faces in the mesh.
-                            This value can be used to determine the size of the face_num_verts array.
-
-    */
-    { // Print Shape data
-        printf("Shapes...\n");
-        for (size_t i = 0; i < number_of_shapes; i++)
-        {
-            printf("[%zd]  Shape name         : %s\n", i, shapes[i].name);     // o crate_Cube.004
-            printf("       Shape face_offset  : %d\n", shapes[i].face_offset); // offset into tinyobj_attrib_t->faces (starting f value, index)
-            printf("       Shape length       : %d\n", shapes[i].length);      // number of faces for the given shape (f values in .obj)
-        }
-    }
-
-    { // Print Attribute data
-        printf("Attribute data...\n");
-        printf("\tnum_vertices       : %d\n", attribute.num_vertices);       // Number of vertices in 'vertices' (the actual array length is num_vertices*3)
-        printf("\tnum_normals        : %d\n", attribute.num_normals);        // Number of vertices in 'normals' (the actual array length is num_normals*3)
-        printf("\tnum_texcoords      : %d\n", attribute.num_texcoords);      // Number of vertices in 'texcoords' (the actual array length is num_normals*2)
-        printf("\tnum_faces          : %d\n", attribute.num_faces);          // Array of faces (containing tinyobj_vertex_index_t information)
-        printf("\tnum_face_num_verts : %d\n", attribute.num_face_num_verts); // Total number of triangles in this object (length of face_num_verts)
-    }
-
-    struct Mesh mesh =
-        {
-            .attribute = attribute,
-
-            .shapes           = shapes,
-            .number_of_shapes = number_of_shapes,
-
-            .materials           = materials,
-            .number_of_materials = number_of_materials,
-
-        };
-
-    return mesh;
-}
-
 /*
-Here we are converting the data from tinyObj into glm vec3
-instead of
-    verticies = float float float float...
-it will be
-    verticies = (vec3){} (vec3){} (vec3){}
+This function takes out data loaded tinyObj and reorganises
+into a format we want to use
 */
-typedef struct
+static triang *_Make_Triangles(tinyobj_attrib_t attrib, unsigned int number_of_triangle)
 {
-    /* vertices */
-    vec3 *vertex;
-
-    /* normals */
-    vec3 *normals;
-
-    /* texture coordinates */
-    vec3 *u; /* u0, u1, u2*/
-    vec3 *v; /* v0, v1, v2*/
-} index_triang;
-
-triang *Make_Triangles(struct Mesh *m)
-{
-    tinyobj_attrib_t attrib        = m->attribute;
-    const size_t     num_triangles = attrib.num_face_num_verts;
-
     /* Allocate array for triangles */
-
-    triang *triangles = malloc(sizeof(triang) * num_triangles);
+    triang *triangles = malloc(sizeof(triang) * number_of_triangle);
+    // TODO: Check this memory
 
 #ifdef OBJ_CENTER
     vec3 bmin, bmax;
@@ -185,7 +71,7 @@ triang *Make_Triangles(struct Mesh *m)
 #endif
 
     // Lets group verts into triangles
-    for (size_t i = 0; i < num_triangles; i++)
+    for (unsigned int i = 0; i < number_of_triangle; i++)
     {
         assert(attrib.face_num_verts[i] % 3 == 0); /* assume all triangle faces. */
 
@@ -279,7 +165,126 @@ triang *Make_Triangles(struct Mesh *m)
     return triangles;
 }
 
-void free_object(struct Mesh *m)
+struct Mesh Mesh_Load(const char *file_name)
+{
+    assert(file_name);
+
+    tinyobj_attrib_t attribute;
+
+    tinyobj_shape_t *shapes;
+    size_t           number_of_shapes;
+
+    tinyobj_material_t *materials;
+    size_t              number_of_materials;
+
+    const int ret = tinyobj_parse_obj(&attribute, &shapes, &number_of_shapes, &materials, &number_of_materials, file_name, loadFile, NULL, TINYOBJ_FLAG_TRIANGULATE);
+    if (ret != TINYOBJ_SUCCESS)
+    {
+        fprintf(stderr, "Failed to parse OBJ file : %s : %s\n", tinyobj_parse_error(ret), file_name);
+        exit(1);
+    }
+
+    assert(shapes);
+
+    // TODO: Fill this better
+    struct Mesh mesh =
+        {
+            .attribute = attribute,
+
+            .shapes           = shapes,
+            .number_of_shapes = number_of_shapes,
+
+            .materials           = materials,
+            .number_of_materials = number_of_materials,
+
+            .number_of_triangles = attribute.num_face_num_verts,
+        };
+
+    if (materials == NULL)
+    {
+        printf("Object has no materials : %s\n", file_name);
+    }
+    else
+    {
+        printf("Material : %s\n", materials->name);
+        // float ambient[3];
+        // float diffuse[3];
+        // float specular[3];
+        // float transmittance[3];
+        // float emission[3];
+        // float shininess;
+        // float ior;
+        // float dissolve;
+        // int   illum;
+
+        printf("\t map_Ka   ambient_texname            :%s\n", materials->ambient_texname);
+        printf("\t map_Kd   diffuse_texname            :%s\n", materials->diffuse_texname);
+        printf("\t map_Ks   specular_texname           :%s\n", materials->specular_texname);
+        printf("\t map_Ns   specular_highlight_texname :%s\n", materials->specular_highlight_texname);
+        printf("\t map_bump bump_texname               :%s\n", materials->bump_texname);
+        printf("\t disp     displacement_texname       :%s\n", materials->displacement_texname);
+        printf("\t map_d    alpha_texname              :%s\n", materials->alpha_texname);
+
+        if (materials->diffuse_texname != NULL)
+        {
+            printf("Loading diffuse_texname...\n");
+            mesh.diffuse_tex  = malloc(sizeof(texture_t));
+            *mesh.diffuse_tex = Texture_Load(materials->diffuse_texname, 3);
+            // TODO: This function should return an error so we can exit the program since
+            //  we are missing a file or file path...
+            // TODO: handle file not found, and file not set differences
+        }
+    }
+
+    /*
+    What are "faces"?
+    - In the .obj file there are lines starting with f these are the faces. The format is:
+        vertex_index/texture_index/normal_index
+    for which each index starts at 1 and increases corresponding to the order in which the referenced element was defined
+    the index is then used to get the values from "attributes.vertices[vertex_index]" for example
+    each "face" is a group of "vertex_index/texture_index/normal_index", 3 faces make a triangle
+
+    face_num_verts      - is an array of integers each element corresponds to the number of vertices in a face.
+                            For example, if face_num_verts[i] is equal to 3, then the i-th face is a triangle.
+    num_face_num_verts  - is an integer that specifies the number of faces in the mesh.
+                            This value can be used to determine the size of the face_num_verts array.
+
+    */
+    { // Print Shape data
+        printf("Shapes...\n");
+        for (size_t i = 0; i < number_of_shapes; i++)
+        {
+            printf("[%zd]  Shape name         : %s\n", i, shapes[i].name);     // o crate_Cube.004
+            printf("       Shape face_offset  : %d\n", shapes[i].face_offset); // offset into tinyobj_attrib_t->faces (starting f value, index)
+            printf("       Shape length       : %d\n", shapes[i].length);      // number of faces for the given shape (f values in .obj)
+        }
+    }
+
+    { // Print Attribute data
+        printf("Attribute data...\n");
+        printf("\tnum_vertices       : %d\n", attribute.num_vertices);       // Number of vertices in 'vertices' (the actual array length is num_vertices*3)
+        printf("\tnum_normals        : %d\n", attribute.num_normals);        // Number of vertices in 'normals' (the actual array length is num_normals*3)
+        printf("\tnum_texcoords      : %d\n", attribute.num_texcoords);      // Number of vertices in 'texcoords' (the actual array length is num_normals*2)
+        printf("\tnum_faces          : %d\n", attribute.num_faces);          // Array of faces (containing tinyobj_vertex_index_t information)
+        printf("\tnum_face_num_verts : %d\n", attribute.num_face_num_verts); // Total number of triangles in this object (length of face_num_verts)
+    }
+
+    mesh.triangle = _Make_Triangles(mesh.attribute, mesh.number_of_triangles);
+
+    assert(mesh.number_of_triangles != 0);
+    assert(mesh.triangle);
+
+    return mesh;
+}
+
+#define DESTROY_TEXTURE(TEX)    \
+    if ((TEX))                  \
+    {                           \
+        Texture_Destroy((TEX)); \
+        (TEX) = NULL;           \
+    }
+
+void Mesh_Destroy(struct Mesh *m)
 {
     tinyobj_attrib_free(&m->attribute);
 
@@ -296,4 +301,19 @@ void free_object(struct Mesh *m)
         m->materials           = NULL;
         m->number_of_materials = 0;
     }
+
+    if (m->triangle)
+    {
+        free(m->triangle);
+        m->triangle            = NULL;
+        m->number_of_triangles = 0;
+    }
+
+    DESTROY_TEXTURE(m->ambient_tex);
+    DESTROY_TEXTURE(m->diffuse_tex);
+    DESTROY_TEXTURE(m->specular_tex);
+    DESTROY_TEXTURE(m->specular_highlight_tex);
+    DESTROY_TEXTURE(m->bump_tex);
+    DESTROY_TEXTURE(m->displacement_tex);
+    DESTROY_TEXTURE(m->alpha_tex);
 }
