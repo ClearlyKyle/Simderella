@@ -16,7 +16,7 @@ texture_t Texture_Load(const char *file_path, int bbp)
     unsigned char *data = stbi_load(file_path, &t.w, &t.h, &t.bpp, bbp);
     if (!data)
     {
-        fprintf(stderr, "Loading image : %s\n", stbi_failure_reason());
+        fprintf(stderr, "Cannot load image : %s : %s\n", stbi_failure_reason(), file_path);
         assert(data);
         return t;
     }
