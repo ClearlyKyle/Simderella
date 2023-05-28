@@ -8,20 +8,21 @@ typedef __m128 mat4x4[4];
 
 inline __m128 mat4x4_mul_m128(const mat4x4 mat, const __m128 vec)
 {
-#if 1 /* Use alternative method */
-    __m128 x1 = _mm_shuffle_ps(vec, vec, _MM_SHUFFLE(0, 0, 0, 0));
-    x1        = _mm_mul_ps(x1, mat[0]);
+#if 0 /* Use alternative method */
+    __m128 vResult = _mm_shuffle_ps(vec, vec, _MM_SHUFFLE(0, 0, 0, 0));
+    vResult        = _mm_mul_ps(vResult, mat[0]);
 
-    __m128 tmp = _mm_shuffle_ps(vec, vec, _MM_SHUFFLE(1, 1, 1, 1));
-    tmp        = _mm_mul_ps(tmp, mat[1]);
+    __m128 vTemp = _mm_shuffle_ps(vec, vec, _MM_SHUFFLE(1, 1, 1, 1));
+    vTemp        = _mm_mul_ps(vTemp, mat[1]);
 
-    x1  = _mm_add_ps(x1, tmp);
-    tmp = _mm_shuffle_ps(vec, vec, _MM_SHUFFLE(2, 2, 2, 2));
+    vResult = _mm_add_ps(vResult, vTemp);
+    vTemp   = _mm_shuffle_ps(vec, vec, _MM_SHUFFLE(2, 2, 2, 2));
 
-    tmp = _mm_mul_ps(tmp, mat[2]);
-    x1  = _mm_add_ps(x1, tmp);
+    vTemp   = _mm_mul_ps(vTemp, mat[2]);
+    vResult = _mm_add_ps(vResult, vTemp);
 
-    x1 = _mm_add_ps(x1, mat[3]);
+    vResult = _mm_add_ps(vResult, mat[3]);
+    return vResult;
 #else /* Use CGLM method */
     __m128 v0 = _mm_shuffle_ps(vec, vec, _MM_SHUFFLE(0, 0, 0, 0));
     __m128 v1 = _mm_shuffle_ps(vec, vec, _MM_SHUFFLE(1, 1, 1, 1));
@@ -33,8 +34,8 @@ inline __m128 mat4x4_mul_m128(const mat4x4 mat, const __m128 vec)
     x1 = glmm_fmadd(mat[2], v2, x1);
     x1 = glmm_fmadd(mat[1], v1, x1);
     x1 = glmm_fmadd(mat[0], v0, x1);
-#endif
     return x1;
+#endif
 }
 
 // TODO: Remove this and dirrectly construct to mat4x4
