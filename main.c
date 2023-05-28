@@ -71,9 +71,9 @@ int main(int argc, char *argv[])
     RenderState.indices           = index_data;
     RenderState.number_of_indices = obj.attribute.num_faces;
 
+    RenderState.number_of_vertices = obj.attribute.num_vertices;
     RenderState.vertices           = obj.attribute.vertices;
     RenderState.vertex_stride      = 3;
-    RenderState.number_of_vertices = obj.attribute.num_vertices;
 
     Render_Set_Viewport(IMAGE_W, IMAGE_H);
 
@@ -120,7 +120,9 @@ int main(int argc, char *argv[])
         sprintf_s(buff, 16, "%fms", Timer_Get_Elapsed_MS(&rasterizer_timer));
         Renderer_Set_Title(buff);
     }
-    
+
+    free(index_data);
+
     Mesh_Destroy(&obj);
     Renderer_Destroy();
 

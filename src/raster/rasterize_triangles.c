@@ -13,7 +13,7 @@ void Raster_Triangles(void)
 
     ASSERT(Trianges_To_Be_Rastered_Counter != 0);
 
-    for (size_t tri_idx = 0; tri_idx < Trianges_To_Be_Rastered_Counter; tri_idx++)
+    for (size_t tri_idx = 0; tri_idx < Trianges_To_Be_Rastered_Counter; /* blank */)
     {
         /* Gather 4 triangles */
         size_t number_of_collected_triangles = 0;
