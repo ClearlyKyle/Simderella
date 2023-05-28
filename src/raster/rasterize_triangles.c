@@ -11,7 +11,7 @@ void Raster_Triangles(void)
     __m128       collected_vertices[4][3] = {0};
     RasterData_t collected_raster_data[4] = {0};
 
-    ASSERT(Trianges_To_Be_Rastered_Counter != 0);
+    assert(Trianges_To_Be_Rastered_Counter != 0);
 
     for (size_t tri_idx = 0; tri_idx < Trianges_To_Be_Rastered_Counter; /* blank */)
     {
@@ -96,6 +96,12 @@ void Raster_Triangles(void)
             const int endXx   = endX.m128i_i32[lane];
             const int startYy = startY.m128i_i32[lane];
             const int endYy   = endY.m128i_i32[lane];
+
+            assert(startXx >= 0 && startXx < IMAGE_W);
+            assert(endXx >= 0 && endXx < IMAGE_W);
+
+            assert(startYy >= 0 && startYy < IMAGE_H);
+            assert(endYy >= 0 && endYy < IMAGE_H);
 
             //__m128 U[3];
             // U[0] = _mm_set1_ps(collected_vertices[lane].tex_u[0]);

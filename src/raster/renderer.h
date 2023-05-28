@@ -14,7 +14,7 @@
 
 typedef struct
 {
-    mat4 view_port_matrix;
+    mat4x4 view_port_matrix;
 
     void  *vertex_shader_uniforms;
     float *vertices;

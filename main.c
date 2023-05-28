@@ -9,11 +9,14 @@
 
 #include "raster/light.h"
 #include "utils/mat4x4.h"
+#include "utils/utils.h"
 
 int main(int argc, char *argv[])
 {
     argc = 0;
     argv = NULL;
+
+    DEBUG_MODE_PRINT;
 
     if (!Reneder_Startup("Simderella", IMAGE_W, IMAGE_H))
     {
@@ -28,19 +31,11 @@ int main(int argc, char *argv[])
     // struct Mesh obj = Mesh_Load("../../res/sponza_small/sponza.obj"); // Big boy
     // struct Mesh obj = Mesh_Load("../../res/dragon.obj"); // Big boy
 
-    mat4 model;
-    glm_translate_make(model, (vec3){0.0f, 0.0f, 0.0f});
-    glm_rotate(model, glm_rad(45.0f), (vec3){0.0f, 1.0f, 0.0f});
-
     vec3 cam_position = {-1.5f, -3.0f, 1.0f};
 
-    mat4 view, proj;
+    mat4x4 view, proj;
     Raster_View_Matrix(view, cam_position);
     Raster_Projection_Matrix(proj, IMAGE_W, IMAGE_H);
-
-    mat4 MVP;
-    glm_mat4_mul(view, model, MVP);
-    glm_mat4_mul(proj, MVP, MVP);
 
     timer_t rasterizer_timer;
     Timer_Start(&rasterizer_timer);
@@ -64,7 +59,6 @@ int main(int argc, char *argv[])
     }
 
     UniformData_t uniform_data;
-    glm_mat4_copy(MVP, uniform_data.MVP);
 
     RenderState.vertex_shader_uniforms = (void *)&uniform_data;
 
@@ -99,6 +93,24 @@ int main(int argc, char *argv[])
         }
 
         fTheta += (float)Timer_Get_Elapsed_MS(&rasterizer_timer) / 32.0f;
+
+        { // Update the MVP matrix for the Vertex Shader
+            mat4x4 model;
+            dash_translate_make(model, 0.0f, 0.0f, 0.0f);
+            dash_rotate(model, glm_rad(fTheta), (vec3){0.0f, 1.0f, 0.0f});
+
+            // mat4 model;
+            // glm_translate_make(model, (vec3){0.0f, 0.0f, 0.0f});
+             glm_rotate(model, glm_rad(fTheta), (vec3){0.0f, 1.0f, 0.0f});
+            // mat4x4 model2;
+            // mat4_to_mat4x4(model, model2);
+
+            mat4x4 MVP;
+            dash_mat_mul_mat(view, model, MVP);
+            dash_mat_mul_mat(proj, MVP, MVP);
+
+            dash_mat_copy(MVP, uniform_data.MVP);
+        }
 
         /* Update Scene here */
         Setup_Triangles();
