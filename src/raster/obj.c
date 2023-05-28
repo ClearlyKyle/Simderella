@@ -1,31 +1,56 @@
 #define TINYOBJ_LOADER_C_IMPLEMENTATION
 #include "obj.h"
 
-static void loadFile(void *ctx, const char *filename, const int is_mtl, const char *obj_filename, char **buffer, size_t *len)
+static int loadFile(void *ctx, const char *filename, const int is_mtl, const char *obj_filename, char **buffer, size_t *len)
 {
-    *buffer            = NULL;
-    long   string_size = 0;
-    size_t read_size   = 0;
-    FILE  *handler     = NULL;
-    fopen_s(&handler, filename, "r");
+    (void)is_mtl;
+    ctx          = NULL;
+    obj_filename = NULL;
 
-    if (handler)
+    FILE   *fp;
+    errno_t err;
+
+    // Open file for reading
+    err = fopen_s(&fp, filename, "rb");
+    if (err != 0 || fp == NULL)
     {
-        fseek(handler, 0, SEEK_END);
-        string_size = ftell(handler);
-        rewind(handler);
-        *buffer                = (char *)malloc(sizeof(char) * (string_size + 1));
-        read_size              = fread(*buffer, sizeof(char), (size_t)string_size, handler);
-        (*buffer)[string_size] = '\0';
-        if (string_size != read_size)
-        {
-            free(buffer);
-            *buffer = NULL;
-        }
-        fclose(handler);
+        fprintf(stderr, "Error opening file %s\n", filename);
+        return TINYOBJ_ERROR_FILE_OPERATION;
     }
 
-    *len = read_size;
+    // Get file size
+    fseek(fp, 0, SEEK_END);
+    const long file_size = ftell(fp);
+    rewind(fp);
+
+    // Allocate buffer for file contents
+    *buffer = (char *)malloc(file_size + 1);
+    if (*buffer == NULL)
+    {
+        fprintf(stderr, "Error allocating memory for file contents\n");
+        fclose(fp);
+        return 1;
+    }
+
+    // Read file into buffer
+    const size_t bytes_read = fread(*buffer, 1, file_size, fp);
+    if (bytes_read != (size_t)file_size)
+    {
+        fprintf(stderr, "Error reading file %s\n", filename);
+        fclose(fp);
+        free(*buffer);
+        *buffer = NULL;
+        return 1;
+    }
+
+    // Null-terminate buffer
+    (*buffer)[bytes_read] = '\0';
+
+    // Set length and clean up
+    *len = bytes_read;
+    fclose(fp);
+
+    return TINYOBJ_SUCCESS;
 }
 
 static const char *tinyobj_parse_error_str[] =
@@ -169,6 +194,8 @@ struct Mesh Mesh_Load(const char *file_name)
 {
     assert(file_name);
 
+    printf("Loading model : %s\n", file_name);
+
     tinyobj_attrib_t attribute;
 
     tinyobj_shape_t *shapes;
@@ -185,6 +212,9 @@ struct Mesh Mesh_Load(const char *file_name)
     }
 
     assert(shapes);
+
+    printf("TinyOBJ Finsihed!\n");
+
 
     // TODO: Fill this better
     struct Mesh mesh =

@@ -5,6 +5,7 @@
 #include <float.h>
 
 #include "SDL2/SDL.h"
+#include "utils/timer.h"
 
 typedef struct Renderer_s
 {
@@ -16,8 +17,11 @@ typedef struct Renderer_s
     SDL_Window  *window;
     SDL_Surface *surface;
 
+    SDL_Renderer *renderer;
+    SDL_Texture  *texture;
+
     SDL_PixelFormat *fmt;
-    unsigned int    *pixels;
+    uint8_t         *pixels;
 
     float  max_depth_value;
     float *depth_buffer;
@@ -60,10 +64,18 @@ static bool Reneder_Startup(const char *title, const int width, const int height
         return false;
     }
 
+    global_renderer.renderer = SDL_CreateRenderer(global_renderer.window, -1, SDL_RENDERER_ACCELERATED);
+    global_renderer.texture  = SDL_CreateTexture(global_renderer.renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STATIC, 1024, 512);
+
     // Get window data
-    global_renderer.surface           = window_surface;
-    global_renderer.fmt               = window_surface->format;
-    global_renderer.pixels            = window_surface->pixels;
+    global_renderer.surface = window_surface;
+    global_renderer.fmt     = window_surface->format;
+
+    printf("Pixel format : %s\n", SDL_GetPixelFormatName(global_renderer.surface->format->format));
+    printf("BytesPP      : %d\n", global_renderer.fmt->BytesPerPixel);
+    printf("BPP          : %d\n", global_renderer.fmt->BitsPerPixel);
+
+    global_renderer.pixels            = (uint8_t *)window_surface->pixels;
     global_renderer.height            = window_surface->h;
     global_renderer.width             = window_surface->w;
     global_renderer.screen_num_pixels = window_surface->h * window_surface->w;
@@ -104,6 +116,9 @@ static void Renderer_Destroy(void)
         global_renderer.depth_buffer = NULL;
     }
 
+    SDL_DestroyRenderer(global_renderer.renderer);
+    SDL_DestroyTexture(global_renderer.texture);
+
     SDL_Quit();
 
     fprintf(stderr, "Renderer has been destroyed\n");
@@ -116,10 +131,14 @@ static inline void Renderer_Clear_Screen_Pixels(void)
 
 static inline void Renderer_Clear_Depth_Buffer(void)
 {
-    for (size_t i = 0; i < global_renderer.screen_num_pixels; i++)
-    {
-        global_renderer.depth_buffer[i] = global_renderer.max_depth_value;
-    }
+    float *end = &global_renderer.depth_buffer[global_renderer.screen_num_pixels];
+    for (float *p = global_renderer.depth_buffer; p != end; p++)
+        *p = global_renderer.max_depth_value;
+
+    // for (size_t i = 0; i < global_renderer.screen_num_pixels; i++)
+    //{
+    //     global_renderer.depth_buffer[i] = global_renderer.max_depth_value;
+    // }
 
     // const float *END = &global_renderer.depth_buffer[global_renderer.screen_num_pixels];
     // for (float *i = global_renderer.depth_buffer;
