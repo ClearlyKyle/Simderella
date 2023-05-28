@@ -1,19 +1,9 @@
 #ifndef __UTILS_H__
 #define __UTILS_H__
 
-#include <assert.h>
+#ifdef DEBUG
 
-#if 1
-#define ASSERT(condition)                                                 \
-    do                                                                    \
-    {                                                                     \
-        if (!(condition))                                                 \
-        {                                                                 \
-            fprintf(stderr, "Assertion failed: %s, file: %s, line: %d\n", \
-                    #condition, __FILE__, __LINE__);                      \
-            abort();                                                      \
-        }                                                                 \
-    } while (0)
+#define DEBUG_MODE_PRINT printf("DEBUG MODE\n")
 
 #define CHECK_ARRAY_BOUNDS(index, size) assert(index >= 0 && index < size && "Array index out of bounds!")
 
@@ -23,11 +13,18 @@
         fprintf(stdout, "[%s:%d] " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__); \
     } while (0)
 
+#define LOGERR(fmt, ...)                                                         \
+    do                                                                           \
+    {                                                                            \
+        fprintf(stderr, "[%s:%d] " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__); \
+    } while (0)
+
 #else
 
-#define ASSERT(condition)
+#define DEBUG_MODE_PRINT
 #define CHECK_ARRAY_BOUNDS(index, size)
 #define LOG(fmt, ...)
+#define LOGERR(fmt, ...)
 
 #endif
 
