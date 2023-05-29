@@ -16,14 +16,16 @@ typedef struct
 {
     mat4x4 view_port_matrix;
 
-    void  *vertex_shader_uniforms;
-    float *vertices;
+    void *vertex_shader_uniforms;
 
-    int     *indices;
-    uint32_t number_of_indices;
+    int   *index_buffer; // void?
+    size_t index_buffer_length;
 
-    uint32_t vertex_stride;
-    uint32_t number_of_vertices;
+    void  *vertex_buffer;
+    size_t vertex_stride;
+    size_t vertex_buffer_length;
+
+    void *data_from_vertex_shader; // To pass onto the FS
 
     uint8_t colour_buffer[IMAGE_W * IMAGE_H * IMAGE_BPP];
     float   depth_buffer[IMAGE_W * IMAGE_H];

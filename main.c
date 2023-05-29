@@ -11,6 +11,24 @@
 #include "utils/mat4x4.h"
 #include "utils/utils.h"
 
+static inline void BindVertexBuffer(void *vertex_buffer, const size_t stride)
+{
+    assert(vertex_buffer);
+    assert(stride > 0);
+
+    RenderState.vertex_buffer = vertex_buffer;
+    RenderState.vertex_stride = stride;
+}
+
+static inline void BindIndexBuffer(int *index_buffer, const size_t length)
+{
+    assert(index_buffer);
+    assert(length > 0);
+
+    RenderState.index_buffer        = index_buffer;
+    RenderState.index_buffer_length = length;
+}
+
 int main(int argc, char *argv[])
 {
     argc = 0;
@@ -62,12 +80,10 @@ int main(int argc, char *argv[])
 
     RenderState.vertex_shader_uniforms = (void *)&uniform_data;
 
-    RenderState.indices           = index_data;
-    RenderState.number_of_indices = obj.attribute.num_faces;
+    BindIndexBuffer(index_data, obj.attribute.num_faces);
+    BindVertexBuffer((void *)obj.attribute.vertices, 3);
 
-    RenderState.number_of_vertices = obj.attribute.num_vertices;
-    RenderState.vertices           = obj.attribute.vertices;
-    RenderState.vertex_stride      = 3;
+    RenderState.vertex_buffer_length = obj.attribute.num_vertices * 3;
 
     Render_Set_Viewport(IMAGE_W, IMAGE_H);
 
@@ -98,12 +114,6 @@ int main(int argc, char *argv[])
             mat4x4 model;
             dash_translate_make(model, 0.0f, 0.0f, 0.0f);
             dash_rotate(model, glm_rad(fTheta), (vec3){0.0f, 1.0f, 0.0f});
-
-            // mat4 model;
-            // glm_translate_make(model, (vec3){0.0f, 0.0f, 0.0f});
-             glm_rotate(model, glm_rad(fTheta), (vec3){0.0f, 1.0f, 0.0f});
-            // mat4x4 model2;
-            // mat4_to_mat4x4(model, model2);
 
             mat4x4 MVP;
             dash_mat_mul_mat(view, model, MVP);

@@ -290,6 +290,8 @@ void Raster_Triangles(void)
                     const __m128i combined_colours = _mm_unpacklo_epi64(interleaved1, interleaved2);
 #else
                     __m128i combined_colours = _mm_set1_epi32(0xFFFFFFFF);
+
+                    // FRAGMENT_SHADER(NULL, vertex)
 #endif
                     // Draw_Pixel_RGBA(pix_x + 0, pix_y, 255, 000, 000, 255);
                     // Draw_Pixel_RGBA(pix_x + 1, pix_y, 255, 000, 000, 255);

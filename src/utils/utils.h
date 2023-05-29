@@ -1,7 +1,7 @@
 #ifndef __UTILS_H__
 #define __UTILS_H__
 
-#ifdef DEBUG
+#if 1
 
 #define DEBUG_MODE_PRINT printf("DEBUG MODE\n")
 

@@ -47,20 +47,20 @@ void Setup_Triangles(void)
 {
     Framebuffer_Clear_Both(FLT_MAX);
 
-    VertexShaderAttributes_t attributes[3];
-
     Trianges_To_Be_Rastered_Counter = 0;
 
     __m128 collected_vertices[4][3] = {0};
     // tinyobj_vertex_index_t collected_indices[4][3];
 
     const size_t starting_index = 0;
-    const size_t ending_index   = RenderState.number_of_indices;
+    const size_t ending_index   = RenderState.index_buffer_length;
+    const size_t vertex_stride  = RenderState.vertex_stride;
 
-    assert(RenderState.number_of_indices != 0);
-    assert(RenderState.vertex_stride != 0);
+    assert(RenderState.index_buffer_length > 0);
+    assert(vertex_stride > 0);
 
-    void *output_to_fragment_shader = NULL; // NOTE: Does this only need to be one value?
+    const int *const index_buffer  = RenderState.index_buffer;
+    uint32_t         *vertex_buffer = (uint32_t *)RenderState.vertex_buffer;
 
     for (size_t vert_idx = starting_index; vert_idx < ending_index; /* blank */)
     {
@@ -70,29 +70,34 @@ void Setup_Triangles(void)
             if (vert_idx == ending_index)
                 break;
 
-            CHECK_ARRAY_BOUNDS(vert_idx, RenderState.number_of_indices);
+            CHECK_ARRAY_BOUNDS(vert_idx, RenderState.index_buffer_length);
 
-            float *v0 = &RenderState.vertices[3 * RenderState.indices[vert_idx + 0]];
-            float *v1 = &RenderState.vertices[3 * RenderState.indices[vert_idx + 1]];
-            float *v2 = &RenderState.vertices[3 * RenderState.indices[vert_idx + 2]];
+            /* Get 3 indices from the index buffer */
+            const int vert0_index = (const int)index_buffer[vert_idx + 0];
+            const int vert1_index = (const int)index_buffer[vert_idx + 1];
+            const int vert2_index = (const int)index_buffer[vert_idx + 2];
 
-            attributes[0].position = _mm_setr_ps(v0[0], v0[1], v0[2], 1.0f);
-            attributes[1].position = _mm_setr_ps(v1[0], v1[1], v1[2], 1.0f);
-            attributes[2].position = _mm_setr_ps(v2[0], v2[1], v2[2], 1.0f);
+            uint32_t *pVertIn0 = (uint32_t *)&vertex_buffer[vertex_stride * vert0_index];
+            uint32_t *pVertIn1 = (uint32_t *)&vertex_buffer[vertex_stride * vert1_index];
+            uint32_t *pVertIn2 = (uint32_t *)&vertex_buffer[vertex_stride * vert2_index];
+
+            CHECK_ARRAY_BOUNDS(vertex_stride * vert0_index, RenderState.vertex_buffer_length);
+            CHECK_ARRAY_BOUNDS(vertex_stride * vert1_index, RenderState.vertex_buffer_length);
+            CHECK_ARRAY_BOUNDS(vertex_stride * vert2_index, RenderState.vertex_buffer_length);
 
             __m128 out_vertex0 = {0};
             __m128 out_vertex1 = {0};
             __m128 out_vertex2 = {0};
-            VERTEX_SHADER(&attributes[0], RenderState.vertex_shader_uniforms, output_to_fragment_shader, &out_vertex0);
-            VERTEX_SHADER(&attributes[1], RenderState.vertex_shader_uniforms, output_to_fragment_shader, &out_vertex1);
-            VERTEX_SHADER(&attributes[2], RenderState.vertex_shader_uniforms, output_to_fragment_shader, &out_vertex2);
+            VERTEX_SHADER(pVertIn0, RenderState.vertex_shader_uniforms, RenderState.data_from_vertex_shader, &out_vertex0);
+            VERTEX_SHADER(pVertIn1, RenderState.vertex_shader_uniforms, RenderState.data_from_vertex_shader, &out_vertex1);
+            VERTEX_SHADER(pVertIn2, RenderState.vertex_shader_uniforms, RenderState.data_from_vertex_shader, &out_vertex2);
 
             collected_vertices[i][0] = mat4x4_mul_m128(RenderState.view_port_matrix, out_vertex0);
             collected_vertices[i][1] = mat4x4_mul_m128(RenderState.view_port_matrix, out_vertex1);
             collected_vertices[i][2] = mat4x4_mul_m128(RenderState.view_port_matrix, out_vertex2);
 
             ++number_of_collected_triangles;
-            vert_idx += RenderState.vertex_stride;
+            vert_idx += 3;
         }
 
         /* Extract the X, Y and W values from 4 traingles  */
@@ -168,5 +173,5 @@ void Setup_Triangles(void)
 #endif
         }
     }
-    //LOGERR("Number of triangles to be rastered : %zu\n", Trianges_To_Be_Rastered_Counter);
+    // LOGERR("Number of triangles to be rastered : %zu\n", Trianges_To_Be_Rastered_Counter);
 }
