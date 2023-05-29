@@ -7,9 +7,9 @@
 typedef struct
 {
     vec3 position;
+    vec2 tex;
     // vec3   normal;
     // vec3   colour;
-    // vec2   tex;
 } VertexShaderAttributes_t;
 
 typedef struct
@@ -19,16 +19,17 @@ typedef struct
 } UniformData_t;
 
 static inline void VERTEX_SHADER(void   *attributes,
+
                                  void   *uniforms,
                                  void   *output_to_fragment_shader,
                                  __m128 *out_vertex)
 {
-    float         *att_pos = (float *)attributes;
-    UniformData_t *uni     = (UniformData_t *)uniforms;
+    VertexShaderAttributes_t *att_pos = (VertexShaderAttributes_t *)attributes;
+    UniformData_t            *uni     = (UniformData_t *)uniforms;
 
     output_to_fragment_shader = (void *)uni->diffuse;
 
-    __m128 position = _mm_setr_ps(att_pos[0], att_pos[1], att_pos[2], 1.0f);
+    __m128 position = _mm_setr_ps(att_pos->position[0], att_pos->position[1], att_pos->position[2], 1.0f);
     *out_vertex     = mat4x4_mul_m128(uni->MVP, position);
 }
 
