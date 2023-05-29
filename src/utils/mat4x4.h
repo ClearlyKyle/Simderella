@@ -119,7 +119,7 @@ void dash_rotate_make(mat4x4 mat, const float angle, vec3 axis)
     mat4_to_mat4x4(m, mat);
 }
 
-CGLM_INLINE
+DASH_INLINE
 void dash_mul_rot(const mat4x4 m1, const mat4x4 m2, mat4x4 dest)
 {
     __m128 v0 = _mm_mul_ps(glmm_splat_x(m2[0]), m1[0]);

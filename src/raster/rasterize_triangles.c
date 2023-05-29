@@ -2,6 +2,97 @@
 #include "utils/utils.h"
 #include "graphics.h"
 
+static inline void Inpterpolate_Attribute(VaryingAttributes_t *varying, InterpolatedPixel_t *res, const __m128 W_vals[3], const __m128 w0, const __m128 w1, const __m128 w2, const __m128 interFactor)
+{
+    for (size_t i = 0; i < NUMBER_OF_VARYING_VE4_ATTRIBUTES; i++)
+    {
+        // TODO : Better naming here plz
+        __m128 X[3];
+        X[0] = _mm_set1_ps(varying[0].vec4_attribute[i].vec.m128_f32[0]);
+        X[1] = _mm_set1_ps(varying[1].vec4_attribute[i].vec.m128_f32[0]);
+        X[2] = _mm_set1_ps(varying[2].vec4_attribute[i].vec.m128_f32[0]);
+
+        __m128 Y[3];
+        Y[0] = _mm_set1_ps(varying[0].vec4_attribute[i].vec.m128_f32[1]);
+        Y[1] = _mm_set1_ps(varying[1].vec4_attribute[i].vec.m128_f32[1]);
+        Y[2] = _mm_set1_ps(varying[2].vec4_attribute[i].vec.m128_f32[1]);
+
+        __m128 Z[3];
+        Z[0] = _mm_set1_ps(varying[0].vec4_attribute[i].vec.m128_f32[2]);
+        Z[1] = _mm_set1_ps(varying[1].vec4_attribute[i].vec.m128_f32[2]);
+        Z[2] = _mm_set1_ps(varying[2].vec4_attribute[i].vec.m128_f32[2]);
+
+        __m128 W[3];
+        W[0] = _mm_set1_ps(varying[0].vec4_attribute[i].vec.m128_f32[3]);
+        W[1] = _mm_set1_ps(varying[1].vec4_attribute[i].vec.m128_f32[3]);
+        W[2] = _mm_set1_ps(varying[2].vec4_attribute[i].vec.m128_f32[3]);
+
+        res->vec4_attribute[i].mX = _mm_add_ps(_mm_add_ps(_mm_mul_ps(X[0], w0), _mm_mul_ps(X[1], w1)), _mm_mul_ps(X[2], w2));
+        res->vec4_attribute[i].mY = _mm_add_ps(_mm_add_ps(_mm_mul_ps(Y[0], w0), _mm_mul_ps(Y[1], w1)), _mm_mul_ps(Y[2], w2));
+        res->vec4_attribute[i].mZ = _mm_add_ps(_mm_add_ps(_mm_mul_ps(Z[0], w0), _mm_mul_ps(Z[1], w1)), _mm_mul_ps(Z[2], w2));
+        res->vec4_attribute[i].mY = _mm_add_ps(_mm_add_ps(_mm_mul_ps(Y[0], w0), _mm_mul_ps(Y[1], w1)), _mm_mul_ps(Y[2], w2));
+
+        res->vec4_attribute[i].mX = _mm_mul_ps(interFactor, res->vec4_attribute[i].mX);
+        res->vec4_attribute[i].mY = _mm_mul_ps(interFactor, res->vec4_attribute[i].mY);
+        res->vec4_attribute[i].mZ = _mm_mul_ps(interFactor, res->vec4_attribute[i].mZ);
+        res->vec4_attribute[i].mY = _mm_mul_ps(interFactor, res->vec4_attribute[i].mY);
+    }
+
+    for (size_t i = 0; i < NUMBER_OF_VARYING_VE3_ATTRIBUTES; i++)
+    {
+        // NOTE: Could we transpose this?
+        __m128 X[3];
+        X[0] = _mm_set1_ps(varying[0].vec3_attribute[i].vec.m128_f32[0]);
+        X[1] = _mm_set1_ps(varying[1].vec3_attribute[i].vec.m128_f32[0]);
+        X[2] = _mm_set1_ps(varying[2].vec3_attribute[i].vec.m128_f32[0]);
+
+        __m128 Y[3];
+        Y[0] = _mm_set1_ps(varying[0].vec3_attribute[i].vec.m128_f32[1]);
+        Y[1] = _mm_set1_ps(varying[1].vec3_attribute[i].vec.m128_f32[1]);
+        Y[2] = _mm_set1_ps(varying[2].vec3_attribute[i].vec.m128_f32[1]);
+
+        __m128 Z[3];
+        Z[0] = _mm_set1_ps(varying[0].vec3_attribute[i].vec.m128_f32[2]);
+        Z[1] = _mm_set1_ps(varying[1].vec3_attribute[i].vec.m128_f32[2]);
+        Z[2] = _mm_set1_ps(varying[2].vec3_attribute[i].vec.m128_f32[2]);
+
+        res->vec3_attribute[i].mX = _mm_add_ps(_mm_add_ps(_mm_mul_ps(X[0], w0), _mm_mul_ps(X[1], w1)), _mm_mul_ps(X[2], w2));
+        res->vec3_attribute[i].mY = _mm_add_ps(_mm_add_ps(_mm_mul_ps(Y[0], w0), _mm_mul_ps(Y[1], w1)), _mm_mul_ps(Y[2], w2));
+        res->vec3_attribute[i].mZ = _mm_add_ps(_mm_add_ps(_mm_mul_ps(Z[0], w0), _mm_mul_ps(Z[1], w1)), _mm_mul_ps(Z[2], w2));
+
+        res->vec3_attribute[i].mX = _mm_mul_ps(interFactor, res->vec3_attribute[i].mX);
+        res->vec3_attribute[i].mY = _mm_mul_ps(interFactor, res->vec3_attribute[i].mY);
+        res->vec3_attribute[i].mZ = _mm_mul_ps(interFactor, res->vec3_attribute[i].mZ);
+    }
+
+    for (size_t i = 0; i < NUMBER_OF_VARYING_VE2_ATTRIBUTES; i++)
+    {
+        __m128 U[3];
+        U[0] = _mm_set1_ps(varying[0].vec2_attribute[i].vec.m128_f32[0]);
+        U[1] = _mm_set1_ps(varying[1].vec2_attribute[i].vec.m128_f32[0]);
+        U[2] = _mm_set1_ps(varying[2].vec2_attribute[i].vec.m128_f32[0]);
+
+        U[0] = _mm_mul_ps(U[0], W_vals[0]);
+        U[1] = _mm_mul_ps(U[1], W_vals[1]);
+        U[2] = _mm_mul_ps(U[2], W_vals[2]);
+
+        __m128 V[3];
+        V[0] = _mm_set1_ps(varying[0].vec2_attribute[i].vec.m128_f32[1]);
+        V[1] = _mm_set1_ps(varying[1].vec2_attribute[i].vec.m128_f32[1]);
+        V[2] = _mm_set1_ps(varying[2].vec2_attribute[i].vec.m128_f32[1]);
+
+        V[0] = _mm_mul_ps(V[0], W_vals[0]);
+        V[1] = _mm_mul_ps(V[1], W_vals[1]);
+        V[2] = _mm_mul_ps(V[2], W_vals[2]);
+
+        res->vec2_attribute[i].mX = _mm_add_ps(_mm_add_ps(_mm_mul_ps(U[0], w0), _mm_mul_ps(U[1], w1)), _mm_mul_ps(U[2], w2));
+        res->vec2_attribute[i].mY = _mm_add_ps(_mm_add_ps(_mm_mul_ps(V[0], w0), _mm_mul_ps(V[1], w1)), _mm_mul_ps(V[2], w2));
+
+        res->vec2_attribute[i].mX = _mm_mul_ps(interFactor, res->vec2_attribute[i].mX);
+        res->vec2_attribute[i].mY = _mm_mul_ps(interFactor, res->vec2_attribute[i].mY);
+    }
+}
+
 void Raster_Triangles(void)
 {
     const __m128i x_pixel_offset = _mm_setr_epi32(0, 1, 2, 3); // X value offsets
@@ -103,16 +194,6 @@ void Raster_Triangles(void)
             assert(startYy >= 0 && startYy < IMAGE_H);
             assert(endYy >= 0 && endYy < IMAGE_H);
 
-            //__m128 U[3];
-            // U[0] = _mm_set1_ps(collected_vertices[lane].tex_u[0]);
-            // U[1] = _mm_set1_ps(collected_vertices[lane].tex_u[1]);
-            // U[2] = _mm_set1_ps(collected_vertices[lane].tex_u[2]);
-
-            //__m128 V[3];
-            // V[0] = _mm_set1_ps(collected_vertices[lane].tex_v[0]);
-            // V[1] = _mm_set1_ps(collected_vertices[lane].tex_v[1]);
-            // V[2] = _mm_set1_ps(collected_vertices[lane].tex_v[2]);
-
             __m128 Z[3];
             Z[0] = _mm_set1_ps(Z_values[0].m128_f32[lane]);
             Z[1] = _mm_set1_ps(Z_values[1].m128_f32[lane]);
@@ -203,13 +284,11 @@ void Raster_Triangles(void)
                     if (_mm_test_all_zeros(mask, mask))
                         continue;
 #endif
-                    const size_t index = pix_y * IMAGE_W + pix_x;
-
-#ifdef STEPPING_Z_VALUES
-                    float *const pDepthBuffer = &depth_buffer[index];
-
+                    const size_t index        = pix_y * IMAGE_W + pix_x;
+                    float *const pDepthBuffer = &RenderState.depth_buffer[index];
+#if 1
                     const __m128 previousDepthValue = _mm_loadu_ps(pDepthBuffer);
-                    const __m128 sseDepthRes        = _mm_cmple_ps(depth, previousDepthValue);
+                    const __m128 sseDepthRes        = _mm_cmplt_ps(depth, previousDepthValue);
 
                     if ((uint16_t)_mm_movemask_ps(sseDepthRes) == 0x0)
                         continue;
@@ -240,8 +319,6 @@ void Raster_Triangles(void)
                     __m128 intrZ = _mm_add_ps(_mm_add_ps(_mm_mul_ps(Z[0], w0), _mm_mul_ps(Z[1], w1)), _mm_mul_ps(Z[2], w2));
                     intrZ        = _mm_mul_ps(intrFactor, intrZ);
 
-                    float *const pDepthBuffer = &RenderState.depth_buffer[index];
-
                     const __m128 previousDepthValue = _mm_loadu_ps(pDepthBuffer);
                     const __m128 sseDepthRes        = _mm_cmple_ps(intrZ, previousDepthValue);
 
@@ -255,49 +332,29 @@ void Raster_Triangles(void)
                         _mm_castps_si128(intrZ),
                         _mm_castps_si128(sseWriteMask),
                         (char *)pDepthBuffer);
+
+                    continue;
 #endif
+                    InterpolatedPixel_t res;
+                    Inpterpolate_Attribute(collected_raster_data[lane].varying, &res, W, w0, w1, w2, intrFactor);
 
-#if 0
-                    __m128 U_w = _mm_add_ps(_mm_add_ps(_mm_mul_ps(U[0], w0), _mm_mul_ps(U[1], w1)), _mm_mul_ps(U[2], w2));
-                    __m128 V_w = _mm_add_ps(_mm_add_ps(_mm_mul_ps(V[0], w0), _mm_mul_ps(V[1], w1)), _mm_mul_ps(V[2], w2));
+                    ivec4 frag_colour0 = {0};
+                    ivec4 frag_colour1 = {0};
+                    ivec4 frag_colour2 = {0};
+                    ivec4 frag_colour3 = {0};
 
-                    // clamp the vector to the range [0.0f, 1.0f]
-                    U_w = _mm_max_ps(_mm_min_ps(U_w, _mm_set1_ps(1.0f)), _mm_setzero_ps());
-                    V_w = _mm_max_ps(_mm_min_ps(V_w, _mm_set1_ps(1.0f)), _mm_setzero_ps());
+                    // NOTE : Maybe just one FS for all the pixels at once?
+                    FRAGMENT_SHADER(&res, 0, &RenderState.data_from_vertex_shader, frag_colour0);
+                    FRAGMENT_SHADER(&res, 1, &RenderState.data_from_vertex_shader, frag_colour1);
+                    FRAGMENT_SHADER(&res, 2, &RenderState.data_from_vertex_shader, frag_colour2);
+                    FRAGMENT_SHADER(&res, 3, &RenderState.data_from_vertex_shader, frag_colour3);
 
-                    U_w = _mm_mul_ps(intrFactor, _mm_mul_ps(U_w, _mm_set1_ps((float)tex_data.w - 1)));
-                    V_w = _mm_mul_ps(intrFactor, _mm_mul_ps(V_w, _mm_set1_ps((float)tex_data.h - 1)));
+                    const __m128i combined_colours = _mm_setr_epi8((uint8_t)frag_colour0[0], (uint8_t)frag_colour0[1], (uint8_t)frag_colour0[2], 255,
+                                                                   (uint8_t)frag_colour1[0], (uint8_t)frag_colour1[1], (uint8_t)frag_colour1[2], 255,
+                                                                   (uint8_t)frag_colour2[0], (uint8_t)frag_colour2[1], (uint8_t)frag_colour2[2], 255,
+                                                                   (uint8_t)frag_colour3[0], (uint8_t)frag_colour3[1], (uint8_t)frag_colour3[2], 255);
 
-                    // (U + texture.width * V) * texture.bpp
-                    const __m128i texture_offset = _mm_mullo_epi32(
-                        _mm_set1_epi32(tex_data.bpp),
-                        _mm_add_epi32(
-                            _mm_cvtps_epi32(U_w),
-                            _mm_mullo_epi32(
-                                _mm_set1_epi32(tex_data.w),
-                                _mm_cvtps_epi32(V_w))));
-
-                    // Pack down to 8 bits
-                    const __m128i sseSample0 = _mm_loadu_epi8((tex_data.data + texture_offset.m128i_u32[0]));
-                    const __m128i sseSample1 = _mm_loadu_epi8((tex_data.data + texture_offset.m128i_u32[1]));
-                    const __m128i sseSample2 = _mm_loadu_epi8((tex_data.data + texture_offset.m128i_u32[2]));
-                    const __m128i sseSample3 = _mm_loadu_epi8((tex_data.data + texture_offset.m128i_u32[3]));
-
-                    const __m128i interleaved1 = _mm_unpacklo_epi32(sseSample0, sseSample1);
-                    const __m128i interleaved2 = _mm_unpacklo_epi32(sseSample2, sseSample3);
-
-                    // combined: [r1, g1, b1, a1, r2, g2, b2, a2, r3, g3, b3, a3, r4, g4, b4, a4]
-                    const __m128i combined_colours = _mm_unpacklo_epi64(interleaved1, interleaved2);
-#else
-                    __m128i combined_colours = _mm_set1_epi32(0xFFFFFFFF);
-
-                    // FRAGMENT_SHADER(NULL, vertex)
-#endif
-                    // Draw_Pixel_RGBA(pix_x + 0, pix_y, 255, 000, 000, 255);
-                    // Draw_Pixel_RGBA(pix_x + 1, pix_y, 255, 000, 000, 255);
-                    // Draw_Pixel_RGBA(pix_x + 2, pix_y, 255, 000, 000, 255);
-                    // Draw_Pixel_RGBA(pix_x + 3, pix_y, 255, 000, 000, 255);
-                    uint8_t *const pixel_location = &RenderState.colour_buffer[index * IMAGE_BPP];
+                    uint8_t *pixel_location = &RenderState.colour_buffer[index * IMAGE_BPP];
 
                     // Mask-store 4-sample fragment values
                     _mm_maskmoveu_si128(

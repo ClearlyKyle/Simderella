@@ -259,7 +259,7 @@ struct Mesh Mesh_Load(const char *file_name)
         {
             printf("Loading diffuse_texname...\n");
             mesh.diffuse_tex  = malloc(sizeof(texture_t));
-            *mesh.diffuse_tex = Texture_Load(materials->diffuse_texname, 3);
+            *mesh.diffuse_tex = Texture_Load(materials->diffuse_texname, 0);
             // TODO: This function should return an error so we can exit the program since
             //  we are missing a file or file path...
             // TODO: handle file not found, and file not set differences

@@ -1,7 +1,7 @@
 #include "renderer.h"
 #include "utils/utils.h"
 
-//#define COMPUTE_AREA_IN_RASTER
+#define COMPUTE_AREA_IN_RASTER
 
 static inline void Compute_Bounding_Box_Screen_Space(vec4 ss_v0, vec4 ss_v1, vec4 ss_v2, ivec4 AABB)
 {
@@ -49,7 +49,8 @@ void Setup_Triangles(void)
 
     Trianges_To_Be_Rastered_Counter = 0;
 
-    __m128 collected_vertices[4][3] = {0};
+    __m128              collected_vertices[4][3] = {0};
+    VaryingAttributes_t collected_varying[4][3]  = {0};
     // tinyobj_vertex_index_t collected_indices[4][3];
 
     const size_t starting_index = 0;
@@ -60,7 +61,7 @@ void Setup_Triangles(void)
     assert(vertex_stride > 0);
 
     const int *const index_buffer  = RenderState.index_buffer;
-    uint32_t         *vertex_buffer = (uint32_t *)RenderState.vertex_buffer;
+    uint32_t        *vertex_buffer = (uint32_t *)RenderState.vertex_buffer;
 
     for (size_t vert_idx = starting_index; vert_idx < ending_index; /* blank */)
     {
@@ -88,9 +89,9 @@ void Setup_Triangles(void)
             __m128 out_vertex0 = {0};
             __m128 out_vertex1 = {0};
             __m128 out_vertex2 = {0};
-            VERTEX_SHADER(pVertIn0, RenderState.vertex_shader_uniforms, RenderState.data_from_vertex_shader, &out_vertex0);
-            VERTEX_SHADER(pVertIn1, RenderState.vertex_shader_uniforms, RenderState.data_from_vertex_shader, &out_vertex1);
-            VERTEX_SHADER(pVertIn2, RenderState.vertex_shader_uniforms, RenderState.data_from_vertex_shader, &out_vertex2);
+            VERTEX_SHADER((void *)pVertIn0, &collected_varying[i][0], RenderState.vertex_shader_uniforms, &RenderState.data_from_vertex_shader, &out_vertex0);
+            VERTEX_SHADER((void *)pVertIn1, &collected_varying[i][1], RenderState.vertex_shader_uniforms, &RenderState.data_from_vertex_shader, &out_vertex1);
+            VERTEX_SHADER((void *)pVertIn2, &collected_varying[i][2], RenderState.vertex_shader_uniforms, &RenderState.data_from_vertex_shader, &out_vertex2);
 
             collected_vertices[i][0] = mat4x4_mul_m128(RenderState.view_port_matrix, out_vertex0);
             collected_vertices[i][1] = mat4x4_mul_m128(RenderState.view_port_matrix, out_vertex1);
@@ -130,9 +131,9 @@ void Setup_Triangles(void)
         Y[1] = _mm_mul_ps(Y[1], W[1]);
         Y[2] = _mm_mul_ps(Y[2], W[2]);
 
-        Z[0] = _mm_mul_ps(Z[0], W[0]);
-        Z[1] = _mm_mul_ps(Z[1], W[1]);
-        Z[2] = _mm_mul_ps(Z[2], W[2]);
+        // Z[0] = _mm_mul_ps(Z[0], W[0]);
+        // Z[1] = _mm_mul_ps(Z[1], W[1]);
+        // Z[2] = _mm_mul_ps(Z[2], W[2]);
 
 #ifndef COMPUTE_AREA_IN_RASTER
         // Why the fuck does this not work?
@@ -166,6 +167,10 @@ void Setup_Triangles(void)
                 tri->ss_v0 = _mm_setr_ps(X[0].m128_f32[mask_idx], Y[0].m128_f32[mask_idx], Z[0].m128_f32[mask_idx], W[0].m128_f32[mask_idx]);
                 tri->ss_v1 = _mm_setr_ps(X[1].m128_f32[mask_idx], Y[1].m128_f32[mask_idx], Z[1].m128_f32[mask_idx], W[1].m128_f32[mask_idx]);
                 tri->ss_v2 = _mm_setr_ps(X[2].m128_f32[mask_idx], Y[2].m128_f32[mask_idx], Z[2].m128_f32[mask_idx], W[2].m128_f32[mask_idx]);
+
+                tri->varying[0] = collected_varying[mask_idx][0];
+                tri->varying[1] = collected_varying[mask_idx][1];
+                tri->varying[2] = collected_varying[mask_idx][2];
 
 #ifndef COMPUTE_AREA_IN_RASTER
                 // tri->area = invTriArea.m128_f32[mask_idx];

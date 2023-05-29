@@ -5,8 +5,7 @@
 
 #include "obj.h"
 #include "utils/mat4x4.h"
-#include "VS.h"
-#include "FS.h"
+#include "shaders.h"
 
 #define IMAGE_W   1024
 #define IMAGE_H   512
@@ -25,7 +24,7 @@ typedef struct
     size_t vertex_stride;
     size_t vertex_buffer_length;
 
-    void *data_from_vertex_shader; // To pass onto the FS
+    VSOutputForFS_t data_from_vertex_shader; // To pass onto the FS
 
     uint8_t colour_buffer[IMAGE_W * IMAGE_H * IMAGE_BPP];
     float   depth_buffer[IMAGE_W * IMAGE_H];
@@ -39,15 +38,10 @@ static inline void Render_Set_Viewport(int width, int height)
     Raster_View_Port_Matrix(RenderState.view_port_matrix, (float)width, (float)height);
 }
 
-#include "VS.h"
-#include "FS.h"
-
 typedef struct
 {
-    __m128 ss_v0, ss_v1, ss_v2; /* Screen Space */
-
-    float tex_u[3];
-    float tex_v[3];
+    __m128              ss_v0, ss_v1, ss_v2; /* Screen Space */
+    VaryingAttributes_t varying[3];
 } RasterData_t;
 
 #define MAX_NUMBER_OF_TRIANGLES_TO_RASTER 4096

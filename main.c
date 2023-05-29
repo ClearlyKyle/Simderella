@@ -29,6 +29,32 @@ static inline void BindIndexBuffer(int *index_buffer, const size_t length)
     RenderState.index_buffer_length = length;
 }
 
+// Function to convert depth buffer to RGBA color buffer
+void Convert_Depth_Buffer_For_Drawing(void)
+{
+    // Define the minimum and maximum depth values in your depth buffer
+    const float minDepth = 0.0f /* Set the minimum depth value */;
+    const float maxDepth = 10.0f /* Set the maximum depth value */;
+
+    // Iterate over each depth value in the depth buffer
+    for (size_t i = 0; i < IMAGE_W * IMAGE_H; ++i)
+    {
+        float depthValue = RenderState.depth_buffer[i];
+
+        // Normalize the depth value between 0 and 1
+        float normalizedDepth = (depthValue - minDepth) / (maxDepth - minDepth);
+
+        // Map the normalized depth value to the range of 0 to 255
+        const uint8_t colorValue = (uint8_t)(normalizedDepth * 255.0f);
+
+        // Assign the color value to the RGBA color buffer
+        RenderState.colour_buffer[i * 4 + 0] = colorValue; // Red component
+        RenderState.colour_buffer[i * 4 + 1] = colorValue; // Green component
+        RenderState.colour_buffer[i * 4 + 2] = colorValue; // Blue component
+        RenderState.colour_buffer[i * 4 + 3] = 255;        // Alpha component (fully opaque)
+    }
+}
+
 int main(int argc, char *argv[])
 {
     argc = 0;
@@ -49,7 +75,7 @@ int main(int argc, char *argv[])
     // struct Mesh obj = Mesh_Load("../../res/sponza_small/sponza.obj"); // Big boy
     // struct Mesh obj = Mesh_Load("../../res/dragon.obj"); // Big boy
 
-    vec3 cam_position = {-1.5f, -3.0f, 1.0f};
+    vec3 cam_position = {0.0f, 0.0f, 3.5f};
 
     mat4x4 view, proj;
     Raster_View_Matrix(view, cam_position);
@@ -70,25 +96,36 @@ int main(int argc, char *argv[])
     sd.shininess          = 128.0f;
 
     // Side quest to get vertex index data...
-    int *index_data = malloc(sizeof(int) * obj.attribute.num_faces);
+    float *vertex_data = malloc(sizeof(float) * obj.attribute.num_faces * 5); // 3 for vert, 2 for tex
+    int   *index_data  = malloc(sizeof(int) * obj.attribute.num_faces);
     for (size_t i = 0; i < obj.attribute.num_faces; i++)
     {
-        index_data[i] = obj.attribute.faces[i].v_idx;
+        tinyobj_vertex_index_t face = obj.attribute.faces[i];
+        index_data[i]               = (int)i; // NOTE : We are not creating unique vertex data here
+
+        vertex_data[i * 5 + 0] = obj.attribute.vertices[face.v_idx * 3 + 0];
+        vertex_data[i * 5 + 1] = obj.attribute.vertices[face.v_idx * 3 + 1];
+        vertex_data[i * 5 + 2] = obj.attribute.vertices[face.v_idx * 3 + 2];
+        vertex_data[i * 5 + 3] = obj.attribute.texcoords[face.vt_idx * 2 + 0];
+        vertex_data[i * 5 + 4] = obj.attribute.texcoords[face.vt_idx * 2 + 1];
     }
 
+    /* Convert obj format to {posX, posY, posZ}{texU, texV} */
+
     UniformData_t uniform_data;
+    uniform_data.diffuse = obj.diffuse_tex;
 
     RenderState.vertex_shader_uniforms = (void *)&uniform_data;
 
     BindIndexBuffer(index_data, obj.attribute.num_faces);
-    BindVertexBuffer((void *)obj.attribute.vertices, 3);
+    BindVertexBuffer((void *)vertex_data, 5);
 
-    RenderState.vertex_buffer_length = obj.attribute.num_vertices * 3;
+    RenderState.vertex_buffer_length = obj.attribute.num_faces * 5;
 
     Render_Set_Viewport(IMAGE_W, IMAGE_H);
 
-    float fTheta = 0.0f;
-
+    float fTheta              = 0.0f;
+    bool  render_depth_buffer = false;
     while (global_renderer.running)
     {
         // Clear z_buffer
@@ -104,6 +141,12 @@ int main(int argc, char *argv[])
                 (SDL_KEYDOWN == event.type && SDL_SCANCODE_ESCAPE == event.key.keysym.scancode))
             {
                 global_renderer.running = false;
+                break;
+            }
+            if ((SDL_QUIT == event.type) ||
+                (SDL_KEYDOWN == event.type && SDL_SCANCODE_D == event.key.keysym.scancode))
+            {
+                render_depth_buffer = !render_depth_buffer;
                 break;
             }
         }
@@ -133,20 +176,29 @@ int main(int argc, char *argv[])
 
         // Update the pixels of the surface with the color buffer data
         assert(global_renderer.screen_num_pixels != IMAGE_W * IMAGE_H * IMAGE_BPP);
+
+        if (render_depth_buffer) /* Draw Depth buffer */
+            Convert_Depth_Buffer_For_Drawing();
+
+        /* Draw Colour buffer */
         memcpy_s(global_renderer.pixels, global_renderer.screen_num_pixels * global_renderer.fmt->BitsPerPixel, RenderState.colour_buffer, IMAGE_W * IMAGE_H * IMAGE_BPP);
+
         SDL_UpdateWindowSurface(global_renderer.window);
 
         Timer_Update(&rasterizer_timer);
 
+        // TODO: Average this over X loops
         char buff[16] = {0};
         sprintf_s(buff, 16, "%fms", Timer_Get_Elapsed_MS(&rasterizer_timer));
         Renderer_Set_Title(buff);
     }
 
     free(index_data);
+    free(vertex_data);
 
     Mesh_Destroy(&obj);
     Renderer_Destroy();
 
+    printf("EXIT_SUCCESS\n");
     return EXIT_SUCCESS;
 }
