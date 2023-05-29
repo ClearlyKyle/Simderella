@@ -81,7 +81,7 @@ static bool Reneder_Startup(const char *title, const int width, const int height
     global_renderer.screen_num_pixels = window_surface->h * window_surface->w;
 
     global_renderer.depth_buffer    = z_buff;
-    global_renderer.max_depth_value = FLT_MAX;
+    global_renderer.max_depth_value = 100.0f;
 
     global_renderer.running = true;
 
@@ -134,19 +134,6 @@ static inline void Renderer_Clear_Depth_Buffer(void)
     float *end = &global_renderer.depth_buffer[global_renderer.screen_num_pixels];
     for (float *p = global_renderer.depth_buffer; p != end; p++)
         *p = global_renderer.max_depth_value;
-
-    // for (size_t i = 0; i < global_renderer.screen_num_pixels; i++)
-    //{
-    //     global_renderer.depth_buffer[i] = global_renderer.max_depth_value;
-    // }
-
-    // const float *END = &global_renderer.depth_buffer[global_renderer.screen_num_pixels];
-    // for (float *i = global_renderer.depth_buffer;
-    //      i < END;
-    //      i += 1)
-    //{
-    //     *i = global_renderer.max_depth_value;
-    // }
 }
 
 static inline void Renderer_Present(void)
