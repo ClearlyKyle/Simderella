@@ -57,8 +57,8 @@ void Setup_Triangles(void)
     const size_t ending_index   = RenderState.index_buffer_length;
     const size_t vertex_stride  = RenderState.vertex_stride;
 
-    assert(RenderState.index_buffer_length > 0);
-    assert(vertex_stride > 0);
+    ASSERT(RenderState.index_buffer_length > 0);
+    ASSERT(vertex_stride > 0);
 
     const int *const index_buffer  = RenderState.index_buffer;
     uint32_t        *vertex_buffer = (uint32_t *)RenderState.vertex_buffer;
@@ -136,7 +136,6 @@ void Setup_Triangles(void)
         // Z[2] = _mm_mul_ps(Z[2], W[2]);
 
 #ifndef COMPUTE_AREA_IN_RASTER
-        // Why the fuck does this not work?
         const __m128 triArea = _mm_sub_ps(
             _mm_mul_ps(_mm_sub_ps(X[2], X[0]), _mm_sub_ps(Y[1], Y[0])),
             _mm_mul_ps(_mm_sub_ps(X[0], X[1]), _mm_sub_ps(Y[0], Y[2])));
@@ -173,7 +172,7 @@ void Setup_Triangles(void)
                 tri->varying[2] = collected_varying[mask_idx][2];
 
 #ifndef COMPUTE_AREA_IN_RASTER
-                // tri->area = invTriArea.m128_f32[mask_idx];
+                tri->area = invTriArea.m128_f32[mask_idx];
             }
 #endif
         }

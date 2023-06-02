@@ -13,8 +13,8 @@
 
 static inline void BindVertexBuffer(void *vertex_buffer, const size_t stride)
 {
-    assert(vertex_buffer);
-    assert(stride > 0);
+    ASSERT(vertex_buffer);
+    ASSERT(stride > 0);
 
     RenderState.vertex_buffer = vertex_buffer;
     RenderState.vertex_stride = stride;
@@ -22,8 +22,8 @@ static inline void BindVertexBuffer(void *vertex_buffer, const size_t stride)
 
 static inline void BindIndexBuffer(int *index_buffer, const size_t length)
 {
-    assert(index_buffer);
-    assert(length > 0);
+    ASSERT(index_buffer);
+    ASSERT(length > 0);
 
     RenderState.index_buffer        = index_buffer;
     RenderState.index_buffer_length = length;

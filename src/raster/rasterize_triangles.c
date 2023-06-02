@@ -188,11 +188,11 @@ void Raster_Triangles(void)
             const int startYy = startY.m128i_i32[lane];
             const int endYy   = endY.m128i_i32[lane];
 
-            assert(startXx >= 0 && startXx < IMAGE_W);
-            assert(endXx >= 0 && endXx < IMAGE_W);
+            ASSERT(startXx >= 0 && startXx < IMAGE_W);
+            ASSERT(endXx >= 0 && endXx < IMAGE_W);
 
-            assert(startYy >= 0 && startYy < IMAGE_H);
-            assert(endYy >= 0 && endYy < IMAGE_H);
+            ASSERT(startYy >= 0 && startYy < IMAGE_H);
+            ASSERT(endYy >= 0 && endYy < IMAGE_H);
 
             __m128 Z[3];
             Z[0] = _mm_set1_ps(Z_values[0].m128_f32[lane]);
