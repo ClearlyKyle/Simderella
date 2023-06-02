@@ -72,14 +72,14 @@ static inline void Inpterpolate_Attribute(VaryingAttributes_t *varying, Interpol
         U[1] = _mm_set1_ps(varying[1].vec2_attribute[i].vec.m128_f32[0]);
         U[2] = _mm_set1_ps(varying[2].vec2_attribute[i].vec.m128_f32[0]);
 
-        U[0] = _mm_mul_ps(U[0], W_vals[0]);
-        U[1] = _mm_mul_ps(U[1], W_vals[1]);
-        U[2] = _mm_mul_ps(U[2], W_vals[2]);
-
         __m128 V[3];
         V[0] = _mm_set1_ps(varying[0].vec2_attribute[i].vec.m128_f32[1]);
         V[1] = _mm_set1_ps(varying[1].vec2_attribute[i].vec.m128_f32[1]);
         V[2] = _mm_set1_ps(varying[2].vec2_attribute[i].vec.m128_f32[1]);
+
+        U[0] = _mm_mul_ps(U[0], W_vals[0]);
+        U[1] = _mm_mul_ps(U[1], W_vals[1]);
+        U[2] = _mm_mul_ps(U[2], W_vals[2]);
 
         V[0] = _mm_mul_ps(V[0], W_vals[0]);
         V[1] = _mm_mul_ps(V[1], W_vals[1]);
@@ -161,6 +161,8 @@ void Raster_Triangles(void)
             _mm_mullo_epi32(B1, A2),
             _mm_mullo_epi32(B2, A1));
         const __m128 oneOverTriArea = _mm_rcp_ps(_mm_cvtepi32_ps(triArea));
+
+        // const __m128 oneOverTriArea = _mm_setr_ps(collected_raster_data[0].area, collected_raster_data[1].area, collected_raster_data[2].area, collected_raster_data[3].area);
 
         Z_values[1] = _mm_mul_ps(_mm_sub_ps(Z_values[1], Z_values[0]), oneOverTriArea);
         Z_values[2] = _mm_mul_ps(_mm_sub_ps(Z_values[2], Z_values[0]), oneOverTriArea);
@@ -274,7 +276,8 @@ void Raster_Triangles(void)
                             depth = _mm_add_ps(depth, Zstep))
                 {
                     /* Check if pixel is inside the triangle */
-                    const __m128i mask = _mm_cmpgt_epi32(_mm_or_si128(_mm_or_si128(alpha, beta), gama), _mm_setzero_si128());
+                    const __m128i or_mask = _mm_or_si128(_mm_or_si128(alpha, beta), gama);
+                    __m128i       mask    = _mm_cmpgt_epi32(or_mask, _mm_setzero_si128());
 
 #if 1
                     const uint16_t maskInt = (uint16_t)_mm_movemask_ps(_mm_cvtepi32_ps(mask));
@@ -284,9 +287,10 @@ void Raster_Triangles(void)
                     if (_mm_test_all_zeros(mask, mask))
                         continue;
 #endif
+
                     const size_t index        = pix_y * IMAGE_W + pix_x;
                     float *const pDepthBuffer = &RenderState.depth_buffer[index];
-#if 1
+
                     const __m128 previousDepthValue = _mm_loadu_ps(pDepthBuffer);
                     const __m128 sseDepthRes        = _mm_cmplt_ps(depth, previousDepthValue);
 
@@ -298,6 +302,8 @@ void Raster_Triangles(void)
                     const __m128 finaldepth = _mm_blendv_ps(previousDepthValue, depth, sseWriteMask);
                     _mm_store_ps(pDepthBuffer, finaldepth);
 
+                    mask = _mm_abs_epi32(mask);
+
                     /* Barycentric Weights */
                     const __m128 w0 = _mm_mul_ps(_mm_cvtepi32_ps(alpha), inv_area);
                     const __m128 w1 = _mm_mul_ps(_mm_cvtepi32_ps(beta), inv_area);
@@ -305,54 +311,29 @@ void Raster_Triangles(void)
 
                     __m128 intrFactor = _mm_add_ps(_mm_add_ps(_mm_mul_ps(W[0], w0), _mm_mul_ps(W[1], w1)), _mm_mul_ps(W[2], w2));
                     intrFactor        = _mm_rcp_ps(intrFactor);
-                    intrFactor        = _mm_mul_ps(intrFactor, _mm_cvtepi32_ps(_mm_and_si128(mask, _mm_set1_epi32(1))));
-#else
-                    /* Barycentric Weights */
-                    const __m128 w0 = _mm_mul_ps(_mm_cvtepi32_ps(alpha), inv_area);
-                    const __m128 w1 = _mm_mul_ps(_mm_cvtepi32_ps(beta), inv_area);
-                    const __m128 w2 = _mm_mul_ps(_mm_cvtepi32_ps(gama), inv_area);
+                    intrFactor        = _mm_mul_ps(intrFactor, _mm_cvtepi32_ps(mask));
 
-                    __m128 intrFactor = _mm_add_ps(_mm_add_ps(_mm_mul_ps(W[0], w0), _mm_mul_ps(W[1], w1)), _mm_mul_ps(W[2], w2));
-                    intrFactor        = _mm_rcp_ps(intrFactor);
-                    intrFactor        = _mm_mul_ps(intrFactor, _mm_cvtepi32_ps(_mm_and_si128(mask, _mm_set1_epi32(1))));
-
-                    __m128 intrZ = _mm_add_ps(_mm_add_ps(_mm_mul_ps(Z[0], w0), _mm_mul_ps(Z[1], w1)), _mm_mul_ps(Z[2], w2));
-                    intrZ        = _mm_mul_ps(intrFactor, intrZ);
-
-                    const __m128 previousDepthValue = _mm_loadu_ps(pDepthBuffer);
-                    const __m128 sseDepthRes        = _mm_cmple_ps(intrZ, previousDepthValue);
-
-                    if ((uint16_t)_mm_movemask_ps(sseDepthRes) == 0x0)
-                        continue;
-
-                    // AND depth mask & coverage mask for quads of fragments
-                    const __m128 sseWriteMask = _mm_and_ps(sseDepthRes, _mm_castsi128_ps(mask));
-
-                    _mm_maskmoveu_si128(
-                        _mm_castps_si128(intrZ),
-                        _mm_castps_si128(sseWriteMask),
-                        (char *)pDepthBuffer);
-
-                    continue;
-#endif
                     InterpolatedPixel_t res;
                     Inpterpolate_Attribute(collected_raster_data[lane].varying, &res, W, w0, w1, w2, intrFactor);
 
-                    ivec4 frag_colour0 = {0};
-                    ivec4 frag_colour1 = {0};
-                    ivec4 frag_colour2 = {0};
-                    ivec4 frag_colour3 = {0};
+                    uint8_t frag_colour0[4] = {0};
+                    uint8_t frag_colour1[4] = {0};
+                    uint8_t frag_colour2[4] = {0};
+                    uint8_t frag_colour3[4] = {0};
 
-                    // NOTE : Maybe just one FS for all the pixels at once?
-                    FRAGMENT_SHADER(&res, 0, &RenderState.data_from_vertex_shader, frag_colour0);
-                    FRAGMENT_SHADER(&res, 1, &RenderState.data_from_vertex_shader, frag_colour1);
-                    FRAGMENT_SHADER(&res, 2, &RenderState.data_from_vertex_shader, frag_colour2);
-                    FRAGMENT_SHADER(&res, 3, &RenderState.data_from_vertex_shader, frag_colour3);
+                    if (mask.m128i_i32[0])
+                        FRAGMENT_SHADER(&res, 0, &RenderState.data_from_vertex_shader, frag_colour0);
+                    if (mask.m128i_i32[1])
+                        FRAGMENT_SHADER(&res, 1, &RenderState.data_from_vertex_shader, frag_colour1);
+                    if (mask.m128i_i32[2])
+                        FRAGMENT_SHADER(&res, 2, &RenderState.data_from_vertex_shader, frag_colour2);
+                    if (mask.m128i_i32[3])
+                        FRAGMENT_SHADER(&res, 3, &RenderState.data_from_vertex_shader, frag_colour3);
 
-                    const __m128i combined_colours = _mm_setr_epi8((uint8_t)frag_colour0[0], (uint8_t)frag_colour0[1], (uint8_t)frag_colour0[2], 255,
-                                                                   (uint8_t)frag_colour1[0], (uint8_t)frag_colour1[1], (uint8_t)frag_colour1[2], 255,
-                                                                   (uint8_t)frag_colour2[0], (uint8_t)frag_colour2[1], (uint8_t)frag_colour2[2], 255,
-                                                                   (uint8_t)frag_colour3[0], (uint8_t)frag_colour3[1], (uint8_t)frag_colour3[2], 255);
+                    const __m128i combined_colours = _mm_setr_epi8(frag_colour0[0], frag_colour0[1], frag_colour0[2], 255,
+                                                                   frag_colour1[0], frag_colour1[1], frag_colour1[2], 255,
+                                                                   frag_colour2[0], frag_colour2[1], frag_colour2[2], 255,
+                                                                   frag_colour3[0], frag_colour3[1], frag_colour3[2], 255);
 
                     uint8_t *pixel_location = &RenderState.colour_buffer[index * IMAGE_BPP];
 
