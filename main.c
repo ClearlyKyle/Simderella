@@ -128,12 +128,6 @@ int main(int argc, char *argv[])
     bool  render_depth_buffer = false;
     while (global_renderer.running)
     {
-        // Clear z_buffer
-        Renderer_Clear_Depth_Buffer();
-
-        // Clear Screen
-        Renderer_Clear_Screen_Pixels();
-
         SDL_Event event;
         while (SDL_PollEvent(&event))
         {
@@ -175,7 +169,7 @@ int main(int argc, char *argv[])
         // SDL_RenderPresent(global_renderer.renderer);
 
         // Update the pixels of the surface with the color buffer data
-        assert(global_renderer.screen_num_pixels != IMAGE_W * IMAGE_H * IMAGE_BPP);
+        ASSERT(global_renderer.screen_num_pixels == IMAGE_W * IMAGE_H * IMAGE_BPP);
 
         if (render_depth_buffer) /* Draw Depth buffer */
             Convert_Depth_Buffer_For_Drawing();

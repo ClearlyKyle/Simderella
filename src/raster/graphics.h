@@ -17,14 +17,8 @@ typedef struct Renderer_s
     SDL_Window  *window;
     SDL_Surface *surface;
 
-    SDL_Renderer *renderer;
-    SDL_Texture  *texture;
-
     SDL_PixelFormat *fmt;
     uint8_t         *pixels;
-
-    float  max_depth_value;
-    float *depth_buffer;
 } Renderer;
 
 extern Renderer global_renderer;
@@ -55,18 +49,6 @@ static bool Reneder_Startup(const char *title, const int width, const int height
 
     SDL_Surface *window_surface = SDL_GetWindowSurface(global_renderer.window);
 
-    // Allocate z buffer
-    // float *z_buff = (float *)_aligned_malloc(sizeof(float) * width * height, 16);
-    float *z_buff = (float *)malloc(sizeof(float) * width * height);
-    if (!z_buff)
-    {
-        fprintf(stderr, "Error with : (float *)_aligned_malloc(sizeof(float) * global_renderer.screen_num_pixels, 16);\n");
-        return false;
-    }
-
-    global_renderer.renderer = SDL_CreateRenderer(global_renderer.window, -1, SDL_RENDERER_ACCELERATED);
-    global_renderer.texture  = SDL_CreateTexture(global_renderer.renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STATIC, 1024, 512);
-
     // Get window data
     global_renderer.surface = window_surface;
     global_renderer.fmt     = window_surface->format;
@@ -78,10 +60,7 @@ static bool Reneder_Startup(const char *title, const int width, const int height
     global_renderer.pixels            = (uint8_t *)window_surface->pixels;
     global_renderer.height            = window_surface->h;
     global_renderer.width             = window_surface->w;
-    global_renderer.screen_num_pixels = window_surface->h * window_surface->w;
-
-    global_renderer.depth_buffer    = z_buff;
-    global_renderer.max_depth_value = 100.0f;
+    global_renderer.screen_num_pixels = window_surface->h * window_surface->w * window_surface->format->BytesPerPixel;
 
     global_renderer.running = true;
 
@@ -109,42 +88,14 @@ static void Renderer_Destroy(void)
         global_renderer.pixels = NULL;
     }
 
-    if (global_renderer.depth_buffer)
-    {
-        //_aligned_free(global_renderer.depth_buffer);
-        free(global_renderer.depth_buffer);
-        global_renderer.depth_buffer = NULL;
-    }
-
-    SDL_DestroyRenderer(global_renderer.renderer);
-    SDL_DestroyTexture(global_renderer.texture);
-
     SDL_Quit();
 
     fprintf(stderr, "Renderer has been destroyed\n");
 }
 
-static inline void Renderer_Clear_Screen_Pixels(void)
-{
-    memset(global_renderer.pixels, 0, global_renderer.screen_num_pixels * 4);
-}
-
-static inline void Renderer_Clear_Depth_Buffer(void)
-{
-    float *end = &global_renderer.depth_buffer[global_renderer.screen_num_pixels];
-    for (float *p = global_renderer.depth_buffer; p != end; p++)
-        *p = global_renderer.max_depth_value;
-}
-
 static inline void Renderer_Present(void)
 {
     SDL_UpdateWindowSurface(global_renderer.window);
-}
-
-static inline void Draw_Pixel_RGBA(const int x, const int y, const uint8_t red, const uint8_t green, const uint8_t blue, const uint8_t alpha)
-{
-    const int index               = y * global_renderer.width + x;
-    global_renderer.pixels[index] = (Uint32)((alpha << 24) + (red << 16) + (green << 8) + (blue << 0));
 }
 
 static inline void Renderer_Set_Title(char *buff)
