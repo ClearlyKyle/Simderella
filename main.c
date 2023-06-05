@@ -7,9 +7,13 @@
 #include "raster/graphics.h"
 #include "raster/renderer.h"
 
+#include "job_system/js.h"
+
 #include "raster/light.h"
 #include "utils/mat4x4.h"
 #include "utils/utils.h"
+
+// TODO : Fix jobs full error
 
 static inline void BindVertexBuffer(void *vertex_buffer, const size_t stride)
 {
@@ -29,20 +33,23 @@ static inline void BindIndexBuffer(int *index_buffer, const size_t length)
     RenderState.index_buffer_length = length;
 }
 
-// Function to convert depth buffer to RGBA color buffer
 void Convert_Depth_Buffer_For_Drawing(void)
 {
     // Define the minimum and maximum depth values in your depth buffer
     const float minDepth = 0.0f /* Set the minimum depth value */;
     const float maxDepth = 10.0f /* Set the maximum depth value */;
 
+#if 0
     // Iterate over each depth value in the depth buffer
-    for (size_t i = 0; i < IMAGE_W * IMAGE_H; ++i)
+     for (size_t i = 0; i < IMAGE_W * IMAGE_H; ++i)
     {
-        float depthValue = RenderState.depth_buffer[i];
+         const float depthValue = RenderState.depth_buffer[i];
+
+        if (depthValue == FLT_MAX)
+            continue;
 
         // Normalize the depth value between 0 and 1
-        float normalizedDepth = (depthValue - minDepth) / (maxDepth - minDepth);
+        const float normalizedDepth = ((depthValue - minDepth) / (maxDepth - minDepth));
 
         // Map the normalized depth value to the range of 0 to 255
         const uint8_t colorValue = (uint8_t)(normalizedDepth * 255.0f);
@@ -53,6 +60,36 @@ void Convert_Depth_Buffer_For_Drawing(void)
         RenderState.colour_buffer[i * 4 + 2] = colorValue; // Blue component
         RenderState.colour_buffer[i * 4 + 3] = 255;        // Alpha component (fully opaque)
     }
+#else
+    // Load the minimum and maximum depth values into SIMD registers
+    __m128 minDepthVec = _mm_set1_ps(minDepth);
+    __m128 maxDepthVec = _mm_set1_ps(maxDepth);
+
+    // Iterate over each depth value in the depth buffer (processing 4 values at a time)
+    for (size_t i = 0; i < IMAGE_W * IMAGE_H; i += 4)
+    {
+        // Load 4 depth values from the depth buffer into a SIMD register
+        __m128 depthVec = _mm_load_ps(&RenderState.depth_buffer[i]);
+
+        __m128 cmp = _mm_cmpeq_ps(depthVec, _mm_set1_ps(FLT_MAX));
+
+        if (_mm_testz_si128(_mm_cvtps_epi32(cmp), _mm_cvtps_epi32(cmp)) == 0)
+            continue;
+
+        // Normalize the depth values between 0 and 1
+        __m128 normalizedDepthVec = _mm_div_ps(_mm_sub_ps(depthVec, minDepthVec), _mm_sub_ps(maxDepthVec, minDepthVec));
+
+        // Map the normalized depth values to the range of 0 to 255
+        __m128i colorValueVec = _mm_cvtps_epi32(_mm_mul_ps(normalizedDepthVec, _mm_set1_ps(255.0f)));
+
+        // Convert the packed integer values to 8-bit unsigned integers
+        __m128i colorValueU8Vec = _mm_packus_epi32(colorValueVec, colorValueVec);
+        colorValueU8Vec         = _mm_packus_epi16(colorValueU8Vec, colorValueU8Vec);
+
+        // Store the color values into the RGBA color buffer
+        _mm_storeu_si128((__m128i *)&RenderState.colour_buffer[i], colorValueU8Vec);
+    }
+#endif
 }
 
 int main(int argc, char *argv[])
@@ -67,6 +104,8 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Error with Reneder_Startup\n");
         return EXIT_FAILURE;
     }
+
+    jobs_init();
 
     /* Load a object */
     struct Mesh obj = Mesh_Load("../../res/Wooden Box/wooden crate.obj");
@@ -160,13 +199,8 @@ int main(int argc, char *argv[])
         }
 
         /* Update Scene here */
-        Setup_Triangles();
-        Raster_Triangles();
-
-        // SDL_UpdateTexture(global_renderer.texture, NULL, RenderState.colour_buffer, IMAGE_W * IMAGE_BPP);
-        // SDL_RenderClear(global_renderer.renderer);
-        // SDL_RenderCopy(global_renderer.renderer, global_renderer.texture, NULL, NULL);
-        // SDL_RenderPresent(global_renderer.renderer);
+        Setup_Triangles_For_MT();
+        Raster_Triangles_MT();
 
         // Update the pixels of the surface with the color buffer data
         ASSERT(global_renderer.screen_num_pixels == IMAGE_W * IMAGE_H * IMAGE_BPP);
@@ -174,10 +208,15 @@ int main(int argc, char *argv[])
         if (render_depth_buffer) /* Draw Depth buffer */
             Convert_Depth_Buffer_For_Drawing();
 
-        /* Draw Colour buffer */
-        memcpy_s(global_renderer.pixels, global_renderer.screen_num_pixels * global_renderer.fmt->BitsPerPixel, RenderState.colour_buffer, IMAGE_W * IMAGE_H * IMAGE_BPP);
-
+/* Draw Colour buffer */
+#ifdef GRAPHICS_USE_SDL_RENDERER
+        SDL_UpdateTexture(global_renderer.texture, NULL, RenderState.colour_buffer, IMAGE_W * IMAGE_BPP);
+        SDL_RenderCopy(global_renderer.renderer, global_renderer.texture, NULL, NULL);
+        SDL_RenderPresent(global_renderer.renderer);
+#else
+        memcpy_s(global_renderer.pixels, global_renderer.screen_num_pixels, RenderState.colour_buffer, IMAGE_W * IMAGE_H * IMAGE_BPP);
         SDL_UpdateWindowSurface(global_renderer.window);
+#endif
 
         Timer_Update(&rasterizer_timer);
 
@@ -192,6 +231,7 @@ int main(int argc, char *argv[])
 
     Mesh_Destroy(&obj);
     Renderer_Destroy();
+    jobs_shutdown();
 
     printf("EXIT_SUCCESS\n");
     return EXIT_SUCCESS;
