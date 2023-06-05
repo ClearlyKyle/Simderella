@@ -50,7 +50,7 @@ typedef struct
 extern RasterData_t Trianges_To_Be_Rastered[MAX_NUMBER_OF_TRIANGLES_TO_RASTER];
 extern size_t       Trianges_To_Be_Rastered_Counter;
 
-void Raster_Triangles(void);
+void Raster_Triangles_MT(void);
 
 typedef struct
 {
