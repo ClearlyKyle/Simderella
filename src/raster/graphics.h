@@ -1,6 +1,8 @@
 #ifndef __SOFTRAWR_H__
 #define __SOFTRAWR_H__
 
+//#define GRAPHICS_USE_SDL_RENDERER
+
 #include <stdbool.h>
 #include <float.h>
 
@@ -14,11 +16,17 @@ typedef struct Renderer_s
     int  height;
     int  screen_num_pixels;
 
-    SDL_Window  *window;
-    SDL_Surface *surface;
+    SDL_Window *window;
 
+#ifdef GRAPHICS_USE_SDL_RENDERER
+    SDL_Renderer *renderer;
+    SDL_Texture  *texture;
+#else
+    SDL_Surface     *surface;
     SDL_PixelFormat *fmt;
     uint8_t         *pixels;
+#endif
+
 } Renderer;
 
 extern Renderer global_renderer;
@@ -47,21 +55,31 @@ static bool Reneder_Startup(const char *title, const int width, const int height
         return false;
     }
 
-    SDL_Surface *window_surface = SDL_GetWindowSurface(global_renderer.window);
+#ifdef GRAPHICS_USE_SDL_RENDERER
+    SDL_Renderer *renderer   = SDL_CreateRenderer(global_renderer.window, -1, 0);
+    global_renderer.renderer = renderer;
 
-    // Get window data
-    global_renderer.surface = window_surface;
-    global_renderer.fmt     = window_surface->format;
+    SDL_Texture *texture    = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STATIC, width, height);
+    global_renderer.texture = texture;
+#else
+    SDL_Surface     *window_surface = SDL_GetWindowSurface(global_renderer.window);
+    global_renderer.surface         = window_surface;
 
-    printf("Pixel format : %s\n", SDL_GetPixelFormatName(global_renderer.surface->format->format));
-    printf("BytesPP      : %d\n", global_renderer.fmt->BytesPerPixel);
-    printf("BPP          : %d\n", global_renderer.fmt->BitsPerPixel);
+    global_renderer.fmt = window_surface->format;
 
-    global_renderer.pixels            = (uint8_t *)window_surface->pixels;
-    global_renderer.height            = window_surface->h;
-    global_renderer.width             = window_surface->w;
+    printf("Window Surface\n\tPixel format : %s\n", SDL_GetPixelFormatName(global_renderer.surface->format->format));
+    printf("\tBytesPP      : %d\n", global_renderer.fmt->BytesPerPixel);
+    printf("\tBPP          : %d\n", global_renderer.fmt->BitsPerPixel);
+    printf("\tPitch : %d\n", window_surface->pitch);
+
+    // global_renderer.pixels            = (uint8_t *)window_surface->pixels;
+    global_renderer.pixels = (uint8_t *)window_surface->pixels;
+    global_renderer.height = window_surface->h;
+    global_renderer.width  = window_surface->w;
+
+    // https://stackoverflow.com/questions/20070155/how-to-set-a-pixel-in-a-sdl-surface
     global_renderer.screen_num_pixels = window_surface->h * window_surface->w * window_surface->format->BytesPerPixel;
-
+#endif
     global_renderer.running = true;
 
     return true;
@@ -75,19 +93,30 @@ static void Renderer_Destroy(void)
         global_renderer.window = NULL;
     }
 
+#ifdef GRAPHICS_USE_SDL_RENDERER
+    if (global_renderer.renderer)
+    {
+        SDL_DestroyRenderer(global_renderer.renderer);
+        global_renderer.renderer = NULL;
+    }
+    if (global_renderer.texture)
+    {
+        SDL_DestroyTexture(global_renderer.texture);
+        global_renderer.texture = NULL;
+    }
+#else
     if (global_renderer.surface)
     {
         SDL_FreeSurface(global_renderer.surface);
         global_renderer.surface = NULL;
         global_renderer.pixels  = NULL;
     }
-
     if (global_renderer.pixels)
     {
         free(global_renderer.pixels);
         global_renderer.pixels = NULL;
     }
-
+#endif
     SDL_Quit();
 
     fprintf(stderr, "Renderer has been destroyed\n");
