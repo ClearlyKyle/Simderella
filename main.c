@@ -176,8 +176,7 @@ int main(int argc, char *argv[])
                 global_renderer.running = false;
                 break;
             }
-            if ((SDL_QUIT == event.type) ||
-                (SDL_KEYDOWN == event.type && SDL_SCANCODE_D == event.key.keysym.scancode))
+            if (SDL_KEYDOWN == event.type && SDL_SCANCODE_D == event.key.keysym.scancode)
             {
                 render_depth_buffer = !render_depth_buffer;
                 break;
