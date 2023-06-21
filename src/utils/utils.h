@@ -4,13 +4,30 @@
 #include <stdio.h>
 #include <assert.h>
 
+#define LOG_UNUSED(val) ((void)(val))
+
 #if 0
 
+//#ifdef __GNUC__
+//#define LOG_LIKELY(expr)   __builtin_expect((expr), 1)
+//#define LOG_UNLIKELY(expr) __builtin_expect((expr), 0)
+//#else
+//#define LOG_LIKELY(expr)   (expre)
+//#define LOG_UNLIKELY(expr) (expre)
+//#endif
+
 #define DEBUG_MODE_PRINT printf("DEBUG MODE\n")
-#define ASSERT(expression)              assert(expression)
+
+#define ASSERT(expr) assert(expr)
+
+//#define ASSERT(expression)         \
+//    if (LOG_LIKELY(!(expression))) \
+//    fprintf(stderr, "assertion failed : %s\n", #expression)
+
 #define LOG(format, ...)                fprintf(stdout, "[DEBUG] " format, ##__VA_ARGS__)
 #define LOGE(format, ...)               fprintf(stderr, "[ERROR] " format, ##__VA_ARGS__)
 
+assert
 /**
  * @brief check the index is in the bounds of the array
  *
