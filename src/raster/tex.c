@@ -3,7 +3,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-texture_t Texture_Load(const char *file_path, int bbp)
+texture_t Texture_Load(const char *file_path, const int bbp)
 {
     texture_t t = {0};
 
