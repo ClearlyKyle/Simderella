@@ -215,7 +215,6 @@ struct Mesh Mesh_Load(const char *file_name)
 
     printf("TinyOBJ Finsihed!\n");
 
-
     // TODO: Fill this better
     struct Mesh mesh =
         {

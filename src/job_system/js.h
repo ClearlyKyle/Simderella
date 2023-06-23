@@ -149,8 +149,8 @@ void jobs_complete_all_work(void)
 
     JOB_STATE->number_of_jobs          = 0;
     JOB_STATE->number_of_jobs_complete = 0;
-    JOB_STATE->job_queue.read_index    = 0;
-    JOB_STATE->job_queue.write_index   = 0;
+    // JOB_STATE->job_queue.read_index    = 0;
+    // JOB_STATE->job_queue.write_index   = 0;
 }
 
 void jobs_init(void)
@@ -214,7 +214,11 @@ bool job_submit(job_t job)
         new_write_index     = (current_write_index + 1) % MAX_NUMBER_OF_JOBS; // Calculate the new write position
 
         if (new_write_index == queue->read_index) // Check if the buffer is full
+        {
             printf("JOBS ARE FULL\n");
+            printf("queue->write_index : %zd, queue->read_index : %zd\n", queue->write_index, queue->read_index);
+            _Do_Work_Queue_Entry(NUM_OF_THREADS);
+        }
 
     } while (Platform_InterlockedCompareExchange((int32_t *)&queue->write_index,
                                                  (int32_t)new_write_index,
