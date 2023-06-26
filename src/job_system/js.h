@@ -9,24 +9,99 @@
 
 #include <windows.h>
 
-/* Define this before the header to include the function bodies */
-// #define  JOB_SYHSTEM_IMPLEMENTATION
+/*
+
+Define this before the header to include the function bodies
+
+#define  JOB_SYHSTEM_IMPLEMENTATION
+
+
+The job system you've written is a multi-threaded system for managing and executing
+jobs concurrently. It allows you to submit jobs to a job queue, which are then
+processed by a pool of worker threads.
+
+job_t: This struct represents a job to be executed by the job system. It contains
+a function pointer to the job's function and a pointer to any arguments required by the function.
+
+thread_info_t: This struct stores information about a thread in the job system.
+Currently, it only contains the logical thread index.
+
+job_queue_t: This struct represents the job queue, where jobs are stored.
+It contains an array to hold the jobs, as well as volatile read and write indices for synchronization.
+
+job_system_t: This struct represents the job system itself. It includes the job queue,
+a job semaphore for synchronization, counts of the number of jobs and completed jobs,
+the number of worker threads, and an array for storing thread information.
+
+
+To use the job system, you should follow these steps:
+
+- Call jobs_init to initialize the job system.
+- Submit jobs to the system using job_submit. Provide the job function
+    and any required arguments in a job_t struct.
+- Optionally, you can call jobs_complete_all_work to wait until
+    all submitted jobs have been completed.
+- When you no longer need the job system, call jobs_shutdown to clean
+    up and shut down the system.
+
+Example program:
+
+#define JOB_SYHSTEM_IMPLEMENTATION
+#include "job_system.h" // Include the job system header file
+
+// Define a job function that will be executed by the job system
+void MyJobFunction(void* arguments) {
+    // Perform the job's work here
+    // Access the job arguments if needed
+}
+
+int main() {
+    // Initialize the job system
+    jobs_init();
+
+    // Create job_t struct and populate it with the job function and arguments
+    job_t myJob;
+    myJob.function = MyJobFunction;
+    myJob.arguments = NULL; // Provide the required arguments here if needed
+
+    // Submit the job to the job system
+    job_submit(myJob);
+
+    // Wait until all submitted jobs have been completed
+    jobs_complete_all_work();
+
+    // Shutdown the job system
+    jobs_shutdown();
+
+    return 0;
+}
+
+*/
 
 #define NUM_OF_THREADS     7 // Minus 1 for the main thread
 #define MAX_NUMBER_OF_JOBS 4096
-//#define DEBUG
+// #define DEBUG
 
+/**
+ * @brief Represents a job to be executed by the job system.
+ */
 typedef struct
 {
-    void (*function)(void *);
-    void *arguments;
+    void (*function)(void *); /** pointer to the function to be executed for the job. */
+    void *arguments;          /** pointer to the arguments required by the job function. */
 } job_t;
 
+/**
+ * @brief Information about a thread in the job system.
+ */
 typedef struct
 {
     int logical_thread_index;
 } thread_info_t;
 
+/**
+ * @brief Job queue for storing jobs in the job system.
+ */
 typedef struct
 {
     job_t jobs[MAX_NUMBER_OF_JOBS];
@@ -34,27 +109,32 @@ typedef struct
     size_t volatile write_index;
 } job_queue_t;
 
+/**
+ * @brief The job system which manages the job queue and worker threads.
+ */
 typedef struct
 {
-    job_queue_t job_queue;
-    void       *job_semaphore;
+    job_queue_t job_queue;     /* job queue for storing jobs. */
+    void       *job_semaphore; /* semaphore used for synchronization with worker threads. */
 
-    size_t volatile number_of_jobs;
-    size_t volatile number_of_jobs_complete;
+    size_t volatile number_of_jobs;          /* count of jobs in the job queue. */
+    size_t volatile number_of_jobs_complete; /* count of completed jobs. */
 
-    size_t        number_of_threads;
-    thread_info_t info[NUM_OF_THREADS];
+    size_t        number_of_threads;    /* number of worker threads in the job system. */
+    thread_info_t info[NUM_OF_THREADS]; /* array to store thread information. */
 } job_system_t;
 
 extern job_system_t *JOB_STATE;
 
 // Job functions
+
 void jobs_init(void);
 void jobs_shutdown(void);
 bool job_submit(job_t job);
 void jobs_complete_all_work(void);
 
 // Thread handling functions
+
 extern int     Platform_ReleaseSemaphore(void *semaphore);
 extern int     Platform_WaitForSingleObject(void *semaphore);
 extern int32_t Platform_InterlockedCompareExchange(int32_t *dest, int32_t exchange, int32_t compare);
@@ -62,6 +142,8 @@ extern int32_t Platform_InterlockedIncrement(int32_t *addend);
 extern int32_t Platform_InterlockedDecrement(int32_t *addend);
 extern void    Platform_CloseHandle(void *handle);
 extern void   *Platform_create_semaphore(size_t initial_count, size_t maximum_count);
+
+// Job system implementation
 
 #ifdef JOB_SYHSTEM_IMPLEMENTATION
 
@@ -105,7 +187,7 @@ static bool _Do_Work_Queue_Entry(int worker_thread_id)
     return false; // Dont sleep the thread
 }
 
-DWORD WINAPI WorkerThread(LPVOID lpParam)
+static DWORD WINAPI WorkerThread(LPVOID lpParam)
 {
     thread_info_t *thread_info = (thread_info_t *)(lpParam);
 
@@ -120,6 +202,12 @@ DWORD WINAPI WorkerThread(LPVOID lpParam)
     return 0;
 }
 
+/**
+ * @brief Completes all pending jobs in the job system.
+ *
+ * This function processes the job queue until all pending jobs have been completed.
+ * After all jobs are completed, it resets the job count and completion count in the job system.
+ */
 void jobs_complete_all_work(void)
 {
 #ifdef DEBUG
@@ -149,10 +237,11 @@ void jobs_complete_all_work(void)
 
     JOB_STATE->number_of_jobs          = 0;
     JOB_STATE->number_of_jobs_complete = 0;
-    // JOB_STATE->job_queue.read_index    = 0;
-    // JOB_STATE->job_queue.write_index   = 0;
 }
 
+/**
+ * @brief Initializes the job system.
+ */
 void jobs_init(void)
 {
     JOB_STATE = malloc(sizeof(job_system_t));
@@ -183,6 +272,12 @@ void jobs_init(void)
     }
 }
 
+/**
+ * @brief Shuts down the job system.
+ *
+ * This function releases all worker threads, clears the job queue, and sets the
+ * job state to NULL
+ */
 void jobs_shutdown(void)
 {
 #ifdef DEBUG
@@ -200,8 +295,19 @@ void jobs_shutdown(void)
     memset(JOB_STATE->job_queue.jobs, 0, sizeof(job_t) * MAX_NUMBER_OF_JOBS);
 
     Platform_CloseHandle(JOB_STATE->job_semaphore);
+
+    free(JOB_STATE);
+    JOB_STATE = NULL;
 }
 
+/**
+ * @brief Submits a job to the job queue.
+ *
+ * This function adds a job to the job queue and signals the worker threads to process it.
+ *
+ * @param job The job to be submitted.
+ * @return Returns `true` if the job was successfully submitted, `false` otherwise.
+ */
 bool job_submit(job_t job)
 {
     job_queue_t *queue = &JOB_STATE->job_queue;
