@@ -3,7 +3,7 @@ SIMDERELLA 3D Software Rasterizer
 
 SIMDERELLA is a 3D software rasterizer written in C using SIMD and multi-threading to accelerate the rendering process. This rasterizer is designed to provide efficient and fast rendering capabilities, with the ability to use vertex and fragment-like shaders similar to OpenGl.
 
-![cube](./images/cube.png)
+![cube](images\cube.PNG)
 
 Features
 --------
