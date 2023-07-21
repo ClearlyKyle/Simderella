@@ -149,9 +149,9 @@ extern void   *Platform_create_semaphore(size_t initial_count, size_t maximum_co
 
 static bool _Do_Work_Queue_Entry(int worker_thread_id)
 {
-#ifndef DEBUG
+    #ifndef DEBUG
     worker_thread_id = 0; // Remove the MSVC Warning
-#endif
+    #endif
     job_queue_t *job_queue = &JOB_STATE->job_queue;
 
     // Read the current read position
@@ -167,15 +167,15 @@ static bool _Do_Work_Queue_Entry(int worker_thread_id)
         if (index == current_read_index)
         {
             job_t job = job_queue->jobs[index];
-#ifdef DEBUG
+    #ifdef DEBUG
             printf("Thread %d is doing work\n", worker_thread_id);
             if (job.function)
                 job.function(job.arguments);
             printf("Thread %d has finished doing work\n", worker_thread_id);
-#else
+    #else
             if (job.function)
                 job.function(job.arguments);
-#endif
+    #endif
             Platform_InterlockedIncrement((int32_t *)&JOB_STATE->number_of_jobs_complete);
         } // else, another thread has beat me here and I should not do anything
     }
@@ -183,7 +183,7 @@ static bool _Do_Work_Queue_Entry(int worker_thread_id)
     {
         return true; // Sleep
     }
-    /* For some reason this can cause perfance drop if set to true... */
+    /* For some reason this can cause performance drop if set to true... */
     return false; // Dont sleep the thread
 }
 
@@ -210,11 +210,11 @@ static DWORD WINAPI WorkerThread(LPVOID lpParam)
  */
 void jobs_complete_all_work(void)
 {
-#ifdef DEBUG
+    #ifdef DEBUG
     printf("BEFORE jobs_complete_all_work -> (job count: %zu)(complete: %zu)\n",
            JOB_STATE->number_of_jobs,
            JOB_STATE->number_of_jobs_complete);
-#endif
+    #endif
     // fprintf(stderr, "BEFORE jobs_complete_all_work -> (job count: %zu)(complete: %zu)\n",
     //         JOB_STATE->number_of_jobs,
     //         JOB_STATE->number_of_jobs_complete);
@@ -229,14 +229,17 @@ void jobs_complete_all_work(void)
         complete_jobs = JOB_STATE->number_of_jobs_complete;
     } while (num_jobs != complete_jobs);
 
-#ifdef DEBUG
+    #ifdef DEBUG
     printf("AFTER jobs_complete_all_work -> (job count: %zu)(complete: %zu)\n",
            JOB_STATE->number_of_jobs,
            JOB_STATE->number_of_jobs_complete);
-#endif
+    #endif
 
     JOB_STATE->number_of_jobs          = 0;
     JOB_STATE->number_of_jobs_complete = 0;
+
+    JOB_STATE->job_queue.read_index  = 0;
+    JOB_STATE->job_queue.write_index = 0;
 }
 
 /**
@@ -280,11 +283,11 @@ void jobs_init(void)
  */
 void jobs_shutdown(void)
 {
-#ifdef DEBUG
+    #ifdef DEBUG
     printf("jobs_shutdown -> (job count: %zu)(complete: %zu)\n",
            JOB_STATE->number_of_jobs,
            JOB_STATE->number_of_jobs_complete);
-#endif
+    #endif
     // Release all worker threads
     for (int i = 0; i < JOB_STATE->number_of_threads; i++)
     {
@@ -308,45 +311,72 @@ void jobs_shutdown(void)
  * @param job The job to be submitted.
  * @return Returns `true` if the job was successfully submitted, `false` otherwise.
  */
+// bool job_submit(job_t job)
+//{
+//     job_queue_t *queue = &JOB_STATE->job_queue;
+
+//    size_t current_write_index, new_write_index;
+
+//    do
+//    {
+//        current_write_index = queue->write_index;                             // Read the current write position
+//        new_write_index     = (current_write_index + 1) % MAX_NUMBER_OF_JOBS; // Calculate the new write position
+
+//        if (new_write_index == queue->read_index) // Check if the buffer is full
+//        {
+//            printf("JOBS ARE FULL\n");
+//            printf("queue->write_index : %zd, queue->read_index : %zd\n", queue->write_index, queue->read_index);
+//            _Do_Work_Queue_Entry(NUM_OF_THREADS);
+//        }
+
+//    } while (Platform_InterlockedCompareExchange((int32_t *)&queue->write_index,
+//                                                 (int32_t)new_write_index,
+//                                                 (int32_t)current_write_index) != current_write_index);
+
+//    queue->jobs[current_write_index] = job; // Add the item to the buffer
+
+//    Platform_InterlockedIncrement((int32_t *)&JOB_STATE->number_of_jobs);
+
+//    Platform_ReleaseSemaphore(JOB_STATE->job_semaphore); // signal the worker threads
+//    return true;
+//}
+
 bool job_submit(job_t job)
 {
     job_queue_t *queue = &JOB_STATE->job_queue;
 
-    size_t current_write_index, new_write_index;
+    // trying to write to the last entry to read
+    const size_t write_index         = queue->write_index;
+    const size_t next_entry_to_write = (write_index + 1) % MAX_NUMBER_OF_JOBS;
+    // assert(next_entry_to_write != queue->read_index);
 
-    do
-    {
-        current_write_index = queue->write_index;                             // Read the current write position
-        new_write_index     = (current_write_index + 1) % MAX_NUMBER_OF_JOBS; // Calculate the new write position
+    job_t *new_job = queue->jobs + write_index;
 
-        if (new_write_index == queue->read_index) // Check if the buffer is full
-        {
-            printf("JOBS ARE FULL\n");
-            printf("queue->write_index : %zd, queue->read_index : %zd\n", queue->write_index, queue->read_index);
-            _Do_Work_Queue_Entry(NUM_OF_THREADS);
-        }
+    *new_job = job;
 
-    } while (Platform_InterlockedCompareExchange((int32_t *)&queue->write_index,
-                                                 (int32_t)new_write_index,
-                                                 (int32_t)current_write_index) != current_write_index);
+    JOB_STATE->number_of_jobs++;
 
-    queue->jobs[current_write_index] = job; // Add the item to the buffer
+    MemoryBarrier();
 
-    Platform_InterlockedIncrement((int32_t *)&JOB_STATE->number_of_jobs);
+    //_WriteBarrier();
+    //_mm_sfence(); // insure that you have a store barrier
 
-    Platform_ReleaseSemaphore(JOB_STATE->job_semaphore); // signal the worker threads
+    queue->write_index = next_entry_to_write;
+
+    ReleaseSemaphore(JOB_STATE->job_semaphore, 1, 0);
+
     return true;
 }
 
-// Linux version using GCC built-in function
-#if defined(__GNUC__)
-#include <semaphore.h>
+    // Linux version using GCC built-in function
+    #if defined(__GNUC__)
+        #include <semaphore.h>
 
 job_system_t *JOB_STATE = NULL;
 
 static inline int Platform_ReleaseSemaphore(sem_t *semaphore)
 {
-#ifdef DEBUG
+        #ifdef DEBUG
     int err = sem_post(sem);
     if (err == -1)
     {
@@ -354,14 +384,14 @@ static inline int Platform_ReleaseSemaphore(sem_t *semaphore)
         strerror_r(errno, errorMsg, sizeof(errorMsg));
         printf("sem_post failed with error: %s\n", errorMsg);
     }
-#else
+        #else
     return sem_post(semaphore);
-#endif
+        #endif
 }
 
 static inline int Platform_WaitForSingleObject(sem_t *semaphore)
 {
-#ifdef DEBUG
+        #ifdef DEBUG
     int err = sem_wait(sem);
     if (err == -1)
     {
@@ -369,9 +399,9 @@ static inline int Platform_WaitForSingleObject(sem_t *semaphore)
         strerror_r(errno, errorMsg, sizeof(errorMsg));
         printf("sem_wait failed with error: %s\n", errorMsg);
     }
-#else
+        #else
     return sem_wait(semaphore);
-#endif
+        #endif
 }
 
 static inline int32_t Platform_InterlockedCompareExchange(int32_t *dest, int32_t exchange, int32_t compare)
@@ -409,7 +439,7 @@ sem_t *Platform_create_semaphore(unsigned int initial_value, unsigned int maximu
     return semaphore;
 }
 
-#elif defined(_WIN32)
+    #elif defined(_WIN32)
 
 job_system_t *JOB_STATE = NULL;
 
@@ -432,7 +462,7 @@ job_system_t *JOB_STATE = NULL;
  */
 inline int Platform_ReleaseSemaphore(void *semaphore)
 {
-#ifdef DEBUG
+        #ifdef DEBUG
     const int result = ReleaseSemaphore((HANDLE)semaphore, 1, 0);
     if (!result)
     {
@@ -445,10 +475,10 @@ inline int Platform_ReleaseSemaphore(void *semaphore)
         LocalFree(lpMsgBuf);
     }
     return result;
-#else
+        #else
     // If the function fails, the return value is zero
     return ReleaseSemaphore((HANDLE)semaphore, 1, 0);
-#endif
+        #endif
 }
 
 /**
@@ -462,7 +492,7 @@ inline int Platform_ReleaseSemaphore(void *semaphore)
  */
 inline int Platform_WaitForSingleObject(void *handle)
 {
-#ifdef DEBUG
+        #ifdef DEBUG
     DWORD result = WaitForSingleObject((HANDLE)handle, INFINITE);
     if (result != WAIT_OBJECT_0)
     {
@@ -475,9 +505,9 @@ inline int Platform_WaitForSingleObject(void *handle)
         return error;
     }
     return 0;
-#else
+        #else
     return WaitForSingleObject((HANDLE)handle, INFINITE);
-#endif
+        #endif
 }
 
 /**
@@ -561,7 +591,7 @@ inline int32_t Platform_InterlockedDecrement(int32_t *addend)
 inline void Platform_CloseHandle(void *handle)
 {
     assert(handle);
-#ifdef DEBUG
+        #ifdef DEBUG
     DWORD result = CloseHandle((HANDLE)handle);
     if (result == 0)
     {
@@ -572,9 +602,9 @@ inline void Platform_CloseHandle(void *handle)
             NULL, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR)&lpMsgBuf, 0, NULL);
         printf("CloseHandle failed with error %d: %s", error, (char *)lpMsgBuf);
     }
-#else
+        #else
     CloseHandle((HANDLE)handle);
-#endif
+        #endif
 }
 
 /**
@@ -600,9 +630,9 @@ inline void *Platform_create_semaphore(size_t initial_count, size_t maximum_coun
     return CreateSemaphoreEx(0, (LONG)initial_count, (LONG)maximum_count, 0, 0, SEMAPHORE_ALL_ACCESS);
 }
 
-#else
-#error Certain functions are not supported on this platform
-#endif
+    #else
+        #error Certain functions are not supported on this platform
+    #endif
 #endif // JOB_SYHSTEM_IMPLEMENTATION
 
 #endif // __JS_H__
