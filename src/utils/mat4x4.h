@@ -4,25 +4,22 @@
 #include <immintrin.h>
 #include "cglm/cglm.h"
 
-// DASH Maths
-
 #if defined(_MSC_VER)
-#ifdef DASH_STATIC
-#define DASH_EXPORT
-#elif defined(DASH_EXPORTS)
-#define DASH_EXPORT __declspec(dllexport)
+    #ifdef DASH_STATIC
+        #define DASH_EXPORT
+    #elif defined(DASH_EXPORTS)
+        #define DASH_EXPORT __declspec(dllexport)
+    #else
+        #define DASH_EXPORT __declspec(dllimport)
+    #endif
+    #define DASH_INLINE __forceinline
 #else
-#define DASH_EXPORT __declspec(dllimport)
-#endif
-#define DASH_INLINE __forceinline
-#else
-#define DASH_EXPORT __attribute__((visibility("default")))
-#define DASH_INLINE static inline __attribute((always_inline))
+    #define DASH_EXPORT __attribute__((visibility("default")))
+    #define DASH_INLINE static inline __attribute((always_inline))
 #endif
 
 typedef __m128 mat4x4[4];
 
-// TODO: Remove this and dirrectly construct to mat4x4
 DASH_INLINE
 void mat4_to_mat4x4(const mat4 m, mat4x4 res)
 {
@@ -81,15 +78,16 @@ void dash_make_identity(mat4x4 m)
 }
 
 DASH_INLINE
-void dash_translate_make(mat4x4 m, float x, float y, float z)
+void dash_translate_make(mat4x4 m, const float x, const float y, const float z)
 {
     dash_make_identity(m);
     m[3] = _mm_setr_ps(x, y, z, 1.0f);
 }
 
-CGLM_INLINE
+DASH_INLINE
 void dash_rotate_make(mat4x4 mat, const float angle, vec3 axis)
 {
+#if 0
     CGLM_ALIGN(8)
     vec3        axisn, v, vs;
     mat4        m = GLM_MAT4_IDENTITY_INIT;
@@ -115,7 +113,10 @@ void dash_rotate_make(mat4x4 mat, const float angle, vec3 axis)
 
     m[0][3] = m[1][3] = m[2][3] = m[3][0] = m[3][1] = m[3][2] = 0.0f;
     m[3][3]                                                   = 1.0f;
-
+#else
+    mat4 m;
+    glm_rotate_make(m, angle, axis);
+#endif
     mat4_to_mat4x4(m, mat);
 }
 
@@ -143,7 +144,7 @@ void dash_mul_rot(const mat4x4 m1, const mat4x4 m2, mat4x4 dest)
 DASH_INLINE
 void dash_rotate(mat4x4 m, float angle, vec3 axis)
 {
-    mat4x4 rot;
+    mat4x4 rot = {0};
     dash_rotate_make(rot, angle, axis);
     dash_mul_rot(m, rot, m);
 }

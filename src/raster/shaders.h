@@ -1,11 +1,10 @@
 #ifndef __SHADERS_H__
 #define __SHADERS_H__
 
-#include <math.h>
-
-#include "tex.h"
-#include "cglm/cglm.h"
-#include "utils/utils.h"
+#define NUMBER_OF_VARYING_VE4_ATTRIBUTES 0
+#define NUMBER_OF_VARYING_VE3_ATTRIBUTES 0
+#define NUMBER_OF_VARYING_VE2_ATTRIBUTES 1
+#include "shader_attributes.h"
 
 typedef struct
 {
@@ -14,33 +13,6 @@ typedef struct
     // vec3   normal;
     // vec3   colour;
 } VertexShaderAttributes_t;
-
-#define NUMBER_OF_VARYING_VE4_ATTRIBUTES 0
-#define NUMBER_OF_VARYING_VE3_ATTRIBUTES 0
-#define NUMBER_OF_VARYING_VE2_ATTRIBUTES 1
-
-typedef struct
-{
-    union
-    {
-        vec4   raw;
-        __m128 vec;
-    } vec4_attribute[NUMBER_OF_VARYING_VE4_ATTRIBUTES + 1];
-
-    union
-    {
-        vec3   raw;
-        float  pad[4];
-        __m128 vec;
-    } vec3_attribute[NUMBER_OF_VARYING_VE3_ATTRIBUTES + 1];
-
-    union
-    {
-        vec2   raw;
-        float  pad[4];
-        __m128 vec;
-    } vec2_attribute[NUMBER_OF_VARYING_VE2_ATTRIBUTES + 1];
-} VaryingAttributes_t;
 
 typedef struct
 {
@@ -52,36 +24,6 @@ typedef struct
 {
     texture_t *diffuse;
 } VSOutputForFS_t;
-
-#pragma warning(push)
-#pragma warning(disable : 4201)
-
-// clang-format off
-typedef struct InterpolatedPixel {
-    struct Vec4Attributes
-    {
-        union { vec4 X; __m128 mX; }; 
-        union { vec4 Y; __m128 mY; };
-        union { vec4 Z; __m128 mZ; };
-        union { vec4 W; __m128 mW; };
-    } vec4_attribute[NUMBER_OF_VARYING_VE4_ATTRIBUTES + 1];
-
-    struct Vec3Attributes
-    {
-        union { vec4 X; __m128 mX; };
-        union { vec4 Y; __m128 mY; };
-        union { vec4 Z; __m128 mZ; };
-    } vec3_attribute[NUMBER_OF_VARYING_VE3_ATTRIBUTES + 1];
-
-    struct Vec2Attributes
-    {
-        union { vec4 X; __m128 mX; };
-        union { vec4 Y; __m128 mY; };
-    } vec2_attribute[NUMBER_OF_VARYING_VE2_ATTRIBUTES + 1];
-} InterpolatedPixel_t;
-
-// clang-format on
-#pragma warning(pop)
 
 static inline void VERTEX_SHADER(void                *attributes,
                                  VaryingAttributes_t *varying,
