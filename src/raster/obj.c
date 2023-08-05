@@ -1,6 +1,10 @@
 #define TINYOBJ_LOADER_C_IMPLEMENTATION
 #include "obj.h"
 
+#define FILE_CHECK_CLOSE(FILE_POINTER) \
+    if (fclose((FILE_POINTER)))        \
+        perror("fclose error");
+
 static int loadFile(void *ctx, const char *filename, const int is_mtl, const char *obj_filename, char **buffer, size_t *len)
 {
     (void)is_mtl;
@@ -14,21 +18,28 @@ static int loadFile(void *ctx, const char *filename, const int is_mtl, const cha
     err = fopen_s(&fp, filename, "rb");
     if (err != 0 || fp == NULL)
     {
-        fprintf(stderr, "Error opening file %s\n", filename);
+        perror(filename);
+        // fprintf(stderr, "Error opening file %s\n", filename);
         return TINYOBJ_ERROR_FILE_OPERATION;
     }
 
     // Get file size
-    fseek(fp, 0, SEEK_END);
+    if (fseek(fp, 0, SEEK_END) != 0)
+    {
+        perror("Error seeking in file");
+        FILE_CHECK_CLOSE(fp);
+        return 1;
+    }
+
     const long file_size = ftell(fp);
     rewind(fp);
 
     // Allocate buffer for file contents
-    *buffer = (char *)malloc(file_size + 1);
+    *buffer = malloc((sizeof *buffer) * (file_size + 1));
     if (*buffer == NULL)
     {
         fprintf(stderr, "Error allocating memory for file contents\n");
-        fclose(fp);
+        FILE_CHECK_CLOSE(fp);
         return 1;
     }
 
@@ -36,8 +47,13 @@ static int loadFile(void *ctx, const char *filename, const int is_mtl, const cha
     const size_t bytes_read = fread(*buffer, 1, file_size, fp);
     if (bytes_read != (size_t)file_size)
     {
-        fprintf(stderr, "Error reading file %s\n", filename);
-        fclose(fp);
+        if (ferror(fp))
+            perror("Error reading from file");
+        else if (feof(fp))
+            printf("End of file reached.\n");
+        clearerr(fp);
+
+        FILE_CHECK_CLOSE(fp);
         free(*buffer);
         *buffer = NULL;
         return 1;
@@ -48,7 +64,7 @@ static int loadFile(void *ctx, const char *filename, const int is_mtl, const cha
 
     // Set length and clean up
     *len = bytes_read;
-    fclose(fp);
+    FILE_CHECK_CLOSE(fp);
 
     return TINYOBJ_SUCCESS;
 }
