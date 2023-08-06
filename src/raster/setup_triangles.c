@@ -4,24 +4,24 @@
 #define JOB_SYHSTEM_IMPLEMENTATION
 #include "job_system/js.h"
 
-#define TRIANGLE_SETUP_TRIANGLES_PER_THREAD 128 * 3 /* 3 incides per triangle */
+#define TRIANGLE_SETUP_TRIANGLES_PER_THREAD 64 * 3 /* 3 incides per triangle */
 #define COMPUTE_AREA_IN_RASTER
 
 /* Data given to each thread for Triangles Setup*/
 typedef struct TriangleSetupData
 {
-    size_t number_of_indices;
     size_t stride;
+    size_t number_of_indices;
     size_t starting_index;
     size_t ending_index;
 } TriangleSetupData_t;
 
 static inline void Compute_Bounding_Box_Screen_Space(vec4 ss_v0, vec4 ss_v1, vec4 ss_v2, ivec4 AABB)
 {
-    const int maxX = (const int)ceilf(fmaxf(ss_v0[0], fmaxf(ss_v1[0], ss_v2[0])));
-    const int minX = (const int)floorf(fminf(ss_v0[0], fminf(ss_v1[0], ss_v2[0])));
-    const int maxY = (const int)ceilf(fmaxf(ss_v0[1], fmaxf(ss_v1[1], ss_v2[1])));
-    const int minY = (const int)floorf(fminf(ss_v0[1], fminf(ss_v1[1], ss_v2[1])));
+    const int maxX = (const int)(fmaxf(ss_v0[0], fmaxf(ss_v1[0], ss_v2[0])) + 0.5f);
+    const int minX = (const int)(fminf(ss_v0[0], fminf(ss_v1[0], ss_v2[0])));
+    const int maxY = (const int)(fmaxf(ss_v0[1], fmaxf(ss_v1[1], ss_v2[1])) + 0.5f);
+    const int minY = (const int)(fminf(ss_v0[1], fminf(ss_v1[1], ss_v2[1])));
 
     AABB[0] = minX;
     AABB[1] = minY;
@@ -40,7 +40,7 @@ static inline void Perspective_Divide_Vertex(vec4 vert)
 
 static void Setup_Triangles(void *data)
 {
-    TriangleSetupData_t *td = (TriangleSetupData_t *)data;
+    const TriangleSetupData_t *const td = (TriangleSetupData_t *)data;
 
     const size_t stride            = Platform_InterlockedIncrement((int32_t *)&td->stride) - 1;
     const size_t max_num_triangles = td->number_of_indices;
@@ -179,13 +179,16 @@ static void Setup_Triangles(void *data)
 
 void Setup_Triangles_For_MT(void)
 {
-    Framebuffer_Clear_Both(FLT_MAX);
+    Framebuffer_Clear_Both();
 
     // TODO: Wrap operations with this with function calls
     Trianges_To_Be_Rastered_Counter = 0;
 
-    TriangleSetupData_t sd = {0};
-    sd.number_of_indices   = RenderState.index_buffer_length;
+    static TriangleSetupData_t sd = {0};
+    sd.stride                     = 0;
+    sd.starting_index             = 0;
+    sd.ending_index               = 0;
+    sd.number_of_indices          = RenderState.index_buffer_length;
 
     const size_t tmp = sd.number_of_indices / TRIANGLE_SETUP_TRIANGLES_PER_THREAD;
 
@@ -195,6 +198,4 @@ void Setup_Triangles_For_MT(void)
         job_submit(job);
 
     jobs_complete_all_work();
-
-    LOGE("Number of triangles to be rastered : %zu\n", Trianges_To_Be_Rastered_Counter);
 }
