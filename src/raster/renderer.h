@@ -66,23 +66,27 @@ typedef struct
 
 void Setup_Triangles_For_MT(void);
 
-inline void Framebuffer_Clear_Depth(const float depth_value)
+inline void Framebuffer_Clear_Depth()
 {
-    // Clear the Depth Buffer
-    const __m256 max_depth    = _mm256_set1_ps(depth_value);
+#if 1 /* Clear the Depth Buffer with set value */
+    const __m256 max_depth    = _mm256_set1_ps(FLT_MAX);
     const int    num_pixels   = IMAGE_W * IMAGE_H;
     float       *depth_buffer = RenderState.depth_buffer;
 
     for (int i = 0; i < num_pixels; i += 8)
         _mm256_store_ps(&depth_buffer[i], max_depth);
+#else
+    /* kinda a cheese, setting the depth to a large value */
+    memset((void *)RenderState.depth_buffer, 0x7777, sizeof(float) * IMAGE_W * IMAGE_H);
+#endif
 }
 
-inline void Framebuffer_Clear_Both(const float depth_value)
+inline void Framebuffer_Clear_Both()
 {
     // Clear the Colour buffer
     memset((void *)RenderState.colour_buffer, 0, sizeof(uint8_t) * IMAGE_W * IMAGE_H * IMAGE_BPP);
 
-    Framebuffer_Clear_Depth(depth_value);
+    Framebuffer_Clear_Depth();
 }
 
 #endif // __RENDERER_H__
