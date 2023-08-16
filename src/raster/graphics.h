@@ -1,7 +1,7 @@
 #ifndef __SOFTRAWR_H__
 #define __SOFTRAWR_H__
 
-//#define GRAPHICS_USE_SDL_RENDERER
+// #define GRAPHICS_USE_SDL_RENDERER
 
 #include <stdbool.h>
 #include <float.h>
@@ -89,8 +89,11 @@ static void Renderer_Destroy(void)
 {
     if (global_renderer.window)
     {
+        // global_renderer.surface is freed when calling this function
         SDL_DestroyWindow(global_renderer.window);
-        global_renderer.window = NULL;
+        global_renderer.window  = NULL;
+        global_renderer.surface = NULL;
+        global_renderer.pixels  = NULL;
     }
 
 #ifdef GRAPHICS_USE_SDL_RENDERER
@@ -103,18 +106,6 @@ static void Renderer_Destroy(void)
     {
         SDL_DestroyTexture(global_renderer.texture);
         global_renderer.texture = NULL;
-    }
-#else
-    if (global_renderer.surface)
-    {
-        SDL_FreeSurface(global_renderer.surface);
-        global_renderer.surface = NULL;
-        global_renderer.pixels  = NULL;
-    }
-    if (global_renderer.pixels)
-    {
-        free(global_renderer.pixels);
-        global_renderer.pixels = NULL;
     }
 #endif
     SDL_Quit();
