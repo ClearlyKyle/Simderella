@@ -15,13 +15,14 @@
 
 // TODO : Fix jobs full error
 
-static inline void BindVertexBuffer(void *vertex_buffer, const size_t stride)
+static inline void BindVertexBuffer(void *vertex_buffer, const size_t length, const size_t stride)
 {
     ASSERT(vertex_buffer);
     ASSERT(stride > 0);
 
-    RenderState.vertex_buffer = vertex_buffer;
-    RenderState.vertex_stride = stride;
+    RenderState.vertex_buffer        = vertex_buffer;
+    RenderState.vertex_stride        = stride;
+    RenderState.vertex_buffer_length = length;
 }
 
 static inline void BindIndexBuffer(int *index_buffer, const size_t length)
@@ -100,10 +101,7 @@ int main(int argc, char *argv[])
     DEBUG_MODE_PRINT;
 
     if (!Reneder_Startup("Simderella", IMAGE_W, IMAGE_H))
-    {
-        fprintf(stderr, "Error with Reneder_Startup\n");
         return EXIT_FAILURE;
-    }
 
     jobs_init();
 
@@ -123,24 +121,13 @@ int main(int argc, char *argv[])
     timer_t rasterizer_timer;
     Timer_Start(&rasterizer_timer);
 
-    vec3 light_position = {0.0f, 0.0f, 6.0f};
-    vec3 diffuse_colour = {0.2f, 0.2f, 0.2f};
-
-    struct ShadingData sd = {0};
-    sd.diffuse_colour     = &diffuse_colour;
-    sd.cam_position       = &cam_position;
-    sd.light_position     = &light_position;
-    sd.ambient_amount     = 0.3f;
-    sd.specular_amount    = 1.0f;
-    sd.shininess          = 128.0f;
-
     // Side quest to get vertex index data...
     float *vertex_data = malloc(sizeof(float) * obj.attribute.num_faces * 5); // 3 for vert, 2 for tex
     int   *index_data  = malloc(sizeof(int) * obj.attribute.num_faces);
     for (size_t i = 0; i < obj.attribute.num_faces; i++)
     {
         tinyobj_vertex_index_t face = obj.attribute.faces[i];
-        index_data[i]               = (int)i; // NOTE : We are not creating unique vertex data here
+        index_data[i]               = (int)i; // NOTE : We are not setting unique indices
 
         vertex_data[i * 5 + 0] = obj.attribute.vertices[face.v_idx * 3 + 0];
         vertex_data[i * 5 + 1] = obj.attribute.vertices[face.v_idx * 3 + 1];
@@ -151,20 +138,22 @@ int main(int argc, char *argv[])
 
     /* Convert obj format to {posX, posY, posZ}{texU, texV} */
 
-    UniformData_t uniform_data;
-    uniform_data.diffuse = obj.diffuse_tex;
+    UniformData_t uniform_data = {0};
+    uniform_data.diffuse       = obj.diffuse_tex;
 
     RenderState.vertex_shader_uniforms = (void *)&uniform_data;
 
     BindIndexBuffer(index_data, obj.attribute.num_faces);
-    BindVertexBuffer((void *)vertex_data, 5);
-
-    RenderState.vertex_buffer_length = obj.attribute.num_faces * 5;
+    BindVertexBuffer((void *)vertex_data, obj.attribute.num_faces * 5, 5);
 
     Render_Set_Viewport(IMAGE_W, IMAGE_H);
 
     float fTheta              = 0.0f;
     bool  render_depth_buffer = false;
+
+    double   frame_accumulated_time = 0.0;
+    uint32_t frame_counter          = 0;
+
     while (global_renderer.running)
     {
         SDL_Event event;
@@ -185,17 +174,14 @@ int main(int argc, char *argv[])
 
         fTheta += (float)Timer_Get_Elapsed_MS(&rasterizer_timer) / 32.0f;
 
-        { // Update the MVP matrix for the Vertex Shader
-            mat4x4 model;
-            dash_translate_make(model, 0.0f, 0.0f, 0.0f);
-            dash_rotate(model, glm_rad(fTheta), (vec3){0.0f, 1.0f, 0.0f});
+        // Update the MVP matrix for the Vertex Shader
+        mat4x4 model = {0};
+        dash_translate_make(model, 0.0f, 0.0f, 0.0f);
+        dash_rotate(model, glm_rad(30.0f), (vec3){0.0f, 1.0f, 0.0f});
+        // dash_rotate(model, glm_rad(fTheta), (vec3){0.0f, 1.0f, 0.0f});
 
-            mat4x4 MVP;
-            dash_mat_mul_mat(view, model, MVP);
-            dash_mat_mul_mat(proj, MVP, MVP);
-
-            dash_mat_copy(MVP, uniform_data.MVP);
-        }
+        dash_mat_mul_mat(view, model, uniform_data.MVP);
+        dash_mat_mul_mat(proj, uniform_data.MVP, uniform_data.MVP);
 
         /* Update Scene here */
         Setup_Triangles_For_MT();
@@ -219,10 +205,20 @@ int main(int argc, char *argv[])
 
         Timer_Update(&rasterizer_timer);
 
-        // TODO: Average this over X loops
-        char buff[16] = {0};
-        sprintf_s(buff, 16, "%fms", Timer_Get_Elapsed_MS(&rasterizer_timer));
-        Renderer_Set_Title(buff);
+        if (frame_counter >= 120)
+        {
+            char buff[16] = {0};
+            sprintf_s(buff, 16, "%fms", frame_accumulated_time / frame_counter);
+            Renderer_Set_Title(buff);
+
+            frame_counter          = 0;
+            frame_accumulated_time = 0.0;
+        }
+        else
+        {
+            frame_accumulated_time += Timer_Get_Elapsed_MS(&rasterizer_timer);
+            frame_counter++;
+        }
     }
 
     free(index_data);
