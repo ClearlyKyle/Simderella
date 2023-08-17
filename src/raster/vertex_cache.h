@@ -15,14 +15,14 @@ typedef struct
 #define VertCACHE_CREATE \
     (VertCache) { 0 }
 
-static inline void VertCache_Add(VertCache *cache, int index, vec4 vert)
+static inline void VertCache_Add(VertCache_t *cache, int index, vec4 vert)
 {
     glm_vec4_copy(vert, cache->clip_values[cache->front]);
     cache->index_values[cache->front] = index;
     cache->front                      = (cache->front + 1) % VERTEX_CACHE_SIZE;
 }
 
-static inline int VertCache_Lookup(VertCache *cache, int index, vec4 dest)
+static inline int VertCache_Lookup(VertCache_t *cache, int index, vec4 dest)
 {
     for (int i = 0; i < VERTEX_CACHE_SIZE; i++)
     {
@@ -35,10 +35,10 @@ static inline int VertCache_Lookup(VertCache *cache, int index, vec4 dest)
     return -1; // Return false
 }
 
-static inline void FIFOCache_Reset_Index_Values(FifoCache *cache)
+static inline void FIFOCache_Reset_Index_Values(VertCache_t *cache)
 {
     *cache = (VertCache_t){0};
-    memset(cache->index_values, -1, sizeof(int) * FIFOCACHE_SIZE);
+    memset(cache->index_values, -1, sizeof(int) * VERTEX_CACHE_SIZE);
 }
 
 #endif // __VERTEX_CACHE_H__
