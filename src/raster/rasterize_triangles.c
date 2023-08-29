@@ -135,8 +135,8 @@ static void Raster_Triangles(void *data)
     }
 
     /* 4 triangles, 3 vertices, 4 * 3 = 12 'x' values, we can store all this in  X_values[3]*/
-    __m128i X_values[3], Y_values[3];
-    __m128  Z_values[3], W_values[3];
+    __m128 Xf_values[3], Yf_values[3];
+    __m128 Z_values[3], W_values[3];
     for (uint8_t i = 0; i < 3; i++)
     {
         /* Get 4 verticies at once */
@@ -148,10 +148,25 @@ static void Raster_Triangles(void *data)
         // transpose into SoA layout
         // X, X, X, X and Y, Y, Y, Y
         _MM_TRANSPOSE4_PS(tri0_vert_i, tri1_vert_i, tri2_vert_i, tri3_vert_i);
-        X_values[i] = _mm_cvtps_epi32(tri0_vert_i);
-        Y_values[i] = _mm_cvtps_epi32(tri1_vert_i);
-        Z_values[i] = tri2_vert_i;
-        W_values[i] = tri3_vert_i;
+        Xf_values[i] = _mm_add_ps(_mm_set1_ps(0.5f), tri0_vert_i);
+        Yf_values[i] = _mm_add_ps(_mm_set1_ps(0.5f), tri1_vert_i);
+        Z_values[i]  = tri2_vert_i;
+        W_values[i]  = tri3_vert_i;
+    }
+
+    // Use bounding box traversal strategy to determine which pixels to rasterize
+    const __m128i startX = _mm_cvtps_epi32(_mm_max_ps(_mm_min_ps(_mm_min_ps(Xf_values[0], Xf_values[1]), Xf_values[2]), _mm_set1_ps(0.0f)));
+    const __m128i endX   = _mm_cvtps_epi32(_mm_min_ps(_mm_max_ps(_mm_max_ps(Xf_values[0], Xf_values[1]), Xf_values[2]), _mm_set1_ps(IMAGE_W)));
+
+    const __m128i startY = _mm_cvtps_epi32(_mm_max_ps(_mm_min_ps(_mm_min_ps(Yf_values[0], Yf_values[1]), Yf_values[2]), _mm_set1_ps(0.0f)));
+    const __m128i endY   = _mm_cvtps_epi32(_mm_min_ps(_mm_max_ps(_mm_max_ps(Yf_values[0], Yf_values[1]), Yf_values[2]), _mm_set1_ps(IMAGE_H)));
+
+    // We switch to using ints for rasterizing
+    __m128i X_values[3], Y_values[3];
+    for (size_t i = 0; i < 3; i++)
+    {
+        X_values[i] = _mm_cvtps_epi32(Xf_values[i]);
+        Y_values[i] = _mm_cvtps_epi32(Yf_values[i]);
     }
 
     // Counter clockwise triangles
