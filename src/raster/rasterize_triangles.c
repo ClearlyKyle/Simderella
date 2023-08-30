@@ -187,19 +187,13 @@ static void Raster_Triangles(void *data)
     const __m128i triArea = _mm_sub_epi32(
         _mm_mullo_epi32(B1, A2),
         _mm_mullo_epi32(B2, A1));
-    const __m128 oneOverTriArea = _mm_rcp_ps(_mm_cvtepi32_ps(triArea));
+    // const __m128 oneOverTriArea = _mm_rcp_ps(_mm_cvtepi32_ps(triArea));
+    const __m128 oneOverTriArea = _mm_div_ps(_mm_set1_ps(1.0f), _mm_cvtepi32_ps(triArea));
 
     // const __m128 oneOverTriArea = _mm_setr_ps(collected_raster_data[0].area, collected_raster_data[1].area, collected_raster_data[2].area, collected_raster_data[3].area);
 
     Z_values[1] = _mm_mul_ps(_mm_sub_ps(Z_values[1], Z_values[0]), oneOverTriArea);
     Z_values[2] = _mm_mul_ps(_mm_sub_ps(Z_values[2], Z_values[0]), oneOverTriArea);
-
-    // Use bounding box traversal strategy to determine which pixels to rasterize
-    const __m128i startX = _mm_and_si128(_mm_max_epi32(_mm_min_epi32(_mm_min_epi32(X_values[0], X_values[1]), X_values[2]), _mm_set1_epi32(0)), _mm_set1_epi32(0xFFFFFFFE));
-    const __m128i endX   = _mm_min_epi32(_mm_add_epi32(_mm_max_epi32(_mm_max_epi32(X_values[0], X_values[1]), X_values[2]), _mm_set1_epi32(1)), _mm_set1_epi32(IMAGE_W));
-
-    const __m128i startY = _mm_and_si128(_mm_max_epi32(_mm_min_epi32(_mm_min_epi32(Y_values[0], Y_values[1]), Y_values[2]), _mm_set1_epi32(0)), _mm_set1_epi32(0xFFFFFFFE));
-    const __m128i endY   = _mm_min_epi32(_mm_add_epi32(_mm_max_epi32(_mm_max_epi32(Y_values[0], Y_values[1]), Y_values[2]), _mm_set1_epi32(1)), _mm_set1_epi32(IMAGE_H));
 
     /* lane is the counter for how many triangles were loaded, if only 3 were loaded, it
         should only be 3, etc...
@@ -294,7 +288,7 @@ static void Raster_Triangles(void *data)
         Zstep        = _mm_add_ps(Zstep, _mm_mul_ps(_mm_cvtepi32_ps(A2_inc), Z[2]));
 
         // Incrementally compute Fab(x, y) for all the pixels inside the bounding box formed by (startX, endX) and (startY, endY)
-        for (size_t pix_y = startYy; pix_y < endYy; ++pix_y,
+        for (size_t pix_y = startYy; pix_y <= endYy; ++pix_y,
                     E0    = _mm_add_epi32(E0, B0_inc),
                     E1    = _mm_add_epi32(E1, B1_inc),
                     E2    = _mm_add_epi32(E2, B2_inc))
@@ -308,32 +302,32 @@ static void Raster_Triangles(void *data)
             depth        = _mm_add_ps(depth, _mm_mul_ps(_mm_cvtepi32_ps(beta), Z[1]));
             depth        = _mm_add_ps(depth, _mm_mul_ps(_mm_cvtepi32_ps(gama), Z[2]));
 
-            for (size_t pix_x = startXx; pix_x < endXx; pix_x += 4,
+            for (size_t pix_x = startXx; pix_x <= endXx; pix_x += 4,
                         alpha = _mm_add_epi32(alpha, A0_inc),
                         beta  = _mm_add_epi32(beta, A1_inc),
                         gama  = _mm_add_epi32(gama, A2_inc),
                         depth = _mm_add_ps(depth, Zstep))
             {
                 // Test Pixel inside triangle
-                const __m128i sseEdge0Positive = _mm_cmpgt_epi32(alpha, _mm_setzero_si128());
-                const __m128i sseEdge0Negative = _mm_cmplt_epi32(alpha, _mm_setzero_si128());
-                const __m128i sseEdge0FuncMask = _mm_or_epi32(sseEdge0Positive,
-                                                              _mm_andnot_epi32(sseEdge0Negative, Edge0TieBreak));
+                const __m128i Edge0Positive = _mm_cmpgt_epi32(alpha, _mm_setzero_si128());
+                const __m128i Edge0Negative = _mm_cmplt_epi32(alpha, _mm_setzero_si128());
+                const __m128i Edge0FuncMask = _mm_or_epi32(Edge0Positive,
+                                                           _mm_andnot_epi32(Edge0Negative, Edge0TieBreak));
 
                 // Edge 1 test
-                const __m128i sseEdge1Positive = _mm_cmpgt_epi32(beta, _mm_setzero_si128());
-                const __m128i sseEdge1Negative = _mm_cmplt_epi32(beta, _mm_setzero_si128());
-                const __m128i sseEdge1FuncMask = _mm_or_epi32(sseEdge1Positive,
-                                                              _mm_andnot_epi32(sseEdge1Negative, Edge1TieBreak));
+                const __m128i Edge1Positive = _mm_cmpgt_epi32(beta, _mm_setzero_si128());
+                const __m128i Edge1Negative = _mm_cmplt_epi32(beta, _mm_setzero_si128());
+                const __m128i Edge1FuncMask = _mm_or_epi32(Edge1Positive,
+                                                           _mm_andnot_epi32(Edge1Negative, Edge1TieBreak));
 
                 // Edge 2 test
-                const __m128i sseEdge2Positive = _mm_cmpgt_epi32(gama, _mm_setzero_si128());
-                const __m128i sseEdge2Negative = _mm_cmplt_epi32(gama, _mm_setzero_si128());
-                const __m128i sseEdge2FuncMask = _mm_or_epi32(sseEdge2Positive,
-                                                              _mm_andnot_epi32(sseEdge2Negative, Edge2TieBreak));
+                const __m128i Edge2Positive = _mm_cmpgt_epi32(gama, _mm_setzero_si128());
+                const __m128i Edge2Negative = _mm_cmplt_epi32(gama, _mm_setzero_si128());
+                const __m128i Edge2FuncMask = _mm_or_epi32(Edge2Positive,
+                                                           _mm_andnot_epi32(Edge2Negative, Edge2TieBreak));
 
                 // Combine resulting masks of all three edges
-                __m128i mask = _mm_and_epi32(sseEdge0FuncMask, _mm_and_epi32(sseEdge1FuncMask, sseEdge2FuncMask));
+                __m128i mask = _mm_and_epi32(Edge0FuncMask, _mm_and_epi32(Edge1FuncMask, Edge2FuncMask));
 
                 /* Check if pixel is inside the triangle */
                 // const __m128i or_mask = _mm_or_si128(_mm_or_si128(alpha, beta), gama);
