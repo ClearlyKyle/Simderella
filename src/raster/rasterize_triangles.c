@@ -370,25 +370,310 @@ static void Raster_Triangles(void *data)
                 InterpolatedPixel_t res;
                 Inpterpolate_Attribute(collected_raster_data[lane].varying, &res, W, w0, w1, w2, intrFactor);
 
-                uint8_t frag_colour0[4] = {0};
-                uint8_t frag_colour1[4] = {0};
-                uint8_t frag_colour2[4] = {0};
-                uint8_t frag_colour3[4] = {0};
-
-                if (mask.m128i_i32[0])
-                    FRAGMENT_SHADER(&res, 0, &RenderState.data_from_vertex_shader, frag_colour0);
-                if (mask.m128i_i32[1])
-                    FRAGMENT_SHADER(&res, 1, &RenderState.data_from_vertex_shader, frag_colour1);
-                if (mask.m128i_i32[2])
-                    FRAGMENT_SHADER(&res, 2, &RenderState.data_from_vertex_shader, frag_colour2);
-                if (mask.m128i_i32[3])
-                    FRAGMENT_SHADER(&res, 3, &RenderState.data_from_vertex_shader, frag_colour3);
+                uint8_t frag_colour[4][4] = {0};
+                for (int i = 0; i < 4; i++)
+                    FRAGMENT_SHADER(&res, i, &RenderState.data_from_vertex_shader, frag_colour[i]);
 
                 // Dont even ask about this pixel format
-                const __m128i combined_colours = _mm_set_epi8(frag_colour3[3], frag_colour3[0], frag_colour3[1], frag_colour3[2],
-                                                              frag_colour2[3], frag_colour2[0], frag_colour2[1], frag_colour2[2],
-                                                              frag_colour1[3], frag_colour1[0], frag_colour1[1], frag_colour1[2],
-                                                              frag_colour0[3], frag_colour0[0], frag_colour0[1], frag_colour0[2]);
+                const __m128i combined_colours = _mm_set_epi8(frag_colour[3][3], frag_colour[3][0], frag_colour[3][1], frag_colour[3][2],
+                                                              frag_colour[2][3], frag_colour[2][0], frag_colour[2][1], frag_colour[2][2],
+                                                              frag_colour[1][3], frag_colour[1][0], frag_colour[1][1], frag_colour[1][2],
+                                                              frag_colour[0][3], frag_colour[0][0], frag_colour[0][1], frag_colour[0][2]);
+
+                uint8_t *const pixel_location = &RenderState.colour_buffer[index * IMAGE_BPP];
+
+#if 1 /* Fabian method */
+                const __m128i original_pixel_data = _mm_loadu_si128((__m128i *)pixel_location);
+
+                const __m128i write_mask    = _mm_castps_si128(sseWriteMask);
+                const __m128i masked_output = _mm_or_si128(_mm_and_si128(write_mask, combined_colours),
+                                                           _mm_andnot_si128(write_mask, original_pixel_data));
+
+                _mm_storeu_si128((__m128i *)pixel_location, masked_output);
+#else
+                // Mask-store 4-sample fragment values
+                _mm_maskstore_epi32(
+                    (int *)pixel_location,
+                    _mm_castps_si128(sseWriteMask),
+                    combined_colours);
+#endif
+            }
+        }
+    }
+}
+
+static void Raster_Trianglesf(void *data)
+{
+    TriangleRasterData_t *rd = (TriangleRasterData_t *)data;
+
+    size_t current_triangle_index = (Platform_InterlockedIncrement((int32_t *)&rd->stride) - 1) * 4;
+
+    const __m128 x_pixel_offset = _mm_setr_ps(0.0f, 1.0f, 2.0f, 3.0f); // X value offsets
+    const __m128 y_pixel_offset = _mm_setr_ps(0.0f, 0.0f, 0.0f, 0.0f); // Y value offsets
+    // const __m128 x_pixel_offset = _mm_setr_ps(0.0f, 1.5f, 2.5f, 3.5f); // X value offsets
+    // const __m128 y_pixel_offset = _mm_setr_ps(0.5f, 0.5f, 0.5f, 0.5f); // Y value offsets
+
+    /* 4 Triangles, with 3 vertices */
+    __m128       collected_vertices[4][3] = {0};
+    RasterData_t collected_raster_data[4] = {0};
+
+    ASSERT(Trianges_To_Be_Rastered_Counter != 0);
+
+    /* Gather 4 triangles */
+    size_t number_of_collected_triangles = 0;
+    for (size_t i = 0; i < 4; i++)
+    {
+        if (current_triangle_index > Trianges_To_Be_Rastered_Counter)
+            break;
+
+        CHECK_ARRAY_BOUNDS(current_triangle_index, MAX_NUMBER_OF_TRIANGLES_TO_RASTER);
+        collected_raster_data[i] = Trianges_To_Be_Rastered[current_triangle_index++];
+
+        collected_vertices[i][0] = collected_raster_data[i].ss_v0;
+        collected_vertices[i][1] = collected_raster_data[i].ss_v1;
+        collected_vertices[i][2] = collected_raster_data[i].ss_v2;
+
+        ++number_of_collected_triangles;
+    }
+
+    /* 4 triangles, 3 vertices, 4 * 3 = 12 'x' values, we can store all this in  X_values[3]*/
+    __m128 X_values[3], Y_values[3];
+    __m128 Z_values[3], W_values[3];
+    for (uint8_t i = 0; i < 3; i++)
+    {
+        /* Get 4 verticies at once */
+        __m128 tri0_vert_i = collected_vertices[0][i]; // Get vertex i from triangle 0
+        __m128 tri1_vert_i = collected_vertices[1][i]; // Get vertex i from triangle 1
+        __m128 tri2_vert_i = collected_vertices[2][i]; // Get vertex i from triangle 2
+        __m128 tri3_vert_i = collected_vertices[3][i]; // Get vertex i from triangle 3
+
+        // transpose into SoA layout
+        // X, X, X, X and Y, Y, Y, Y
+        _MM_TRANSPOSE4_PS(tri0_vert_i, tri1_vert_i, tri2_vert_i, tri3_vert_i);
+        X_values[i] = tri0_vert_i;
+        Y_values[i] = tri1_vert_i;
+        Z_values[i] = tri2_vert_i;
+        W_values[i] = tri3_vert_i;
+    }
+
+    // Use bounding box traversal strategy to determine which pixels to rasterize
+    const __m128 startX = _mm_max_ps(_mm_min_ps(_mm_min_ps(X_values[0], X_values[1]), X_values[2]), _mm_set1_ps(0.0f));
+    const __m128 endX   = _mm_min_ps(_mm_max_ps(_mm_max_ps(X_values[0], X_values[1]), X_values[2]), _mm_set1_ps(IMAGE_W));
+
+    const __m128 startY = _mm_max_ps(_mm_min_ps(_mm_min_ps(Y_values[0], Y_values[1]), Y_values[2]), _mm_set1_ps(0.0f));
+    const __m128 endY   = _mm_min_ps(_mm_max_ps(_mm_max_ps(Y_values[0], Y_values[1]), Y_values[2]), _mm_set1_ps(IMAGE_H));
+
+    // Counter clockwise triangles
+    const __m128 A0 = _mm_sub_ps(Y_values[2], Y_values[1]); // 0 - 1
+    const __m128 A1 = _mm_sub_ps(Y_values[0], Y_values[2]); // 1 - 2
+    const __m128 A2 = _mm_sub_ps(Y_values[1], Y_values[0]); // 2 - 0
+
+    const __m128 B0 = _mm_sub_ps(X_values[1], X_values[2]); // 1 - 0
+    const __m128 B1 = _mm_sub_ps(X_values[2], X_values[0]); // 2 - 1
+    const __m128 B2 = _mm_sub_ps(X_values[0], X_values[1]); // 0 - 2
+
+    // Compute C = (xa * yb - xb * ya) for the 3 line segments that make up each triangle
+    const __m128 C0 = _mm_sub_ps(_mm_mul_ps(X_values[2], Y_values[1]), _mm_mul_ps(X_values[1], Y_values[2]));
+    const __m128 C1 = _mm_sub_ps(_mm_mul_ps(X_values[0], Y_values[2]), _mm_mul_ps(X_values[2], Y_values[0]));
+    const __m128 C2 = _mm_sub_ps(_mm_mul_ps(X_values[1], Y_values[0]), _mm_mul_ps(X_values[0], Y_values[1]));
+
+    // Compute inverse triangle area
+    const __m128 triArea = _mm_sub_ps(
+        _mm_mul_ps(B1, A2),
+        _mm_mul_ps(B2, A1));
+    // const __m128 oneOverTriArea = _mm_rcp_ps(_mm_cvtepi32_ps(triArea));
+    const __m128 oneOverTriArea = _mm_div_ps(_mm_set1_ps(1.0f), triArea);
+
+    // const __m128 oneOverTriArea = _mm_setr_ps(collected_raster_data[0].area, collected_raster_data[1].area, collected_raster_data[2].area, collected_raster_data[3].area);
+
+    Z_values[1] = _mm_mul_ps(_mm_sub_ps(Z_values[1], Z_values[0]), oneOverTriArea);
+    Z_values[2] = _mm_mul_ps(_mm_sub_ps(Z_values[2], Z_values[0]), oneOverTriArea);
+
+    /* lane is the counter for how many triangles were loaded, if only 3 were loaded, it
+        should only be 3, etc...
+    */
+    for (int lane = 0; lane < number_of_collected_triangles; lane++) // Now we have 4 triangles set up.  Rasterize them each individually.
+    {
+        const float area_value = oneOverTriArea.m128_f32[lane];
+        if (area_value < 0.0f)
+            continue;
+
+        const __m128 inv_area = _mm_set1_ps(area_value);
+
+        const int startXx = (const int)startX.m128_f32[lane];
+        const int endXx   = (const int)endX.m128_f32[lane];
+        const int startYy = (const int)startY.m128_f32[lane];
+        const int endYy   = (const int)endY.m128_f32[lane];
+
+        ASSERT(startXx >= 0 && startXx < IMAGE_W);
+        ASSERT(endXx >= 0 && endXx < IMAGE_W);
+
+        ASSERT(startYy >= 0 && startYy < IMAGE_H);
+        ASSERT(endYy >= 0 && endYy < IMAGE_H);
+
+        __m128 Z[3];
+        Z[0] = _mm_set1_ps(Z_values[0].m128_f32[lane]);
+        Z[1] = _mm_set1_ps(Z_values[1].m128_f32[lane]);
+        Z[2] = _mm_set1_ps(Z_values[2].m128_f32[lane]);
+
+        __m128 W[3];
+        W[0] = _mm_set1_ps(W_values[0].m128_f32[lane]);
+        W[1] = _mm_set1_ps(W_values[1].m128_f32[lane]);
+        W[2] = _mm_set1_ps(W_values[2].m128_f32[lane]);
+
+        const __m128 a0 = _mm_set1_ps(A0.m128_f32[lane]);
+        const __m128 a1 = _mm_set1_ps(A1.m128_f32[lane]);
+        const __m128 a2 = _mm_set1_ps(A2.m128_f32[lane]);
+
+        const __m128 b0 = _mm_set1_ps(B0.m128_f32[lane]);
+        const __m128 b1 = _mm_set1_ps(B1.m128_f32[lane]);
+        const __m128 b2 = _mm_set1_ps(B2.m128_f32[lane]);
+
+        // Add our SIMD pixel offset to our starting pixel location, so we are doing 4 pixels in the x axis
+        // so we add 0, 1, 2, 3, to the starting x value, y isnt changing
+        const __m128 col = _mm_add_ps(x_pixel_offset, _mm_set1_ps((float)startXx));
+        const __m128 row = _mm_add_ps(y_pixel_offset, _mm_set1_ps((float)startYy));
+
+        const __m128 A0_start = _mm_mul_ps(a0, col);
+        const __m128 A1_start = _mm_mul_ps(a1, col);
+        const __m128 A2_start = _mm_mul_ps(a2, col);
+
+        /* Step in the y direction */
+        // First we must compute E at out starting pixel, this will be the minX and minY of
+        // our boudning box of the traingle
+        const __m128 B0_start = _mm_mul_ps(b0, row);
+        const __m128 B1_start = _mm_mul_ps(b1, row);
+        const __m128 B2_start = _mm_mul_ps(b2, row);
+
+        // Barycentric Setip
+        // Order of triangle sides *IMPORTANT*
+        // E(x, y) = a*x + b*y + c;
+        // v1, v2 :  w0_row = (A12 * p.x) + (B12 * p.y) + C12;
+        __m128 E0 = _mm_add_ps(_mm_add_ps(A0_start, B0_start), _mm_set1_ps(C0.m128_f32[lane]));
+        __m128 E1 = _mm_add_ps(_mm_add_ps(A1_start, B1_start), _mm_set1_ps(C1.m128_f32[lane]));
+        __m128 E2 = _mm_add_ps(_mm_add_ps(A2_start, B2_start), _mm_set1_ps(C2.m128_f32[lane]));
+
+        // Since we are doing SIMD, we need to calcaulte our step amount
+        // E(x+L, y) = E(x) + L dy (where dy is out a0 values)
+        // B0_inc controls the step amount in the Y axis, since we are only moving 1px at a time in the y axis
+        // we dont need to change the step amount
+        const __m128 B0_inc = b0;
+        const __m128 B1_inc = b1;
+        const __m128 B2_inc = b2;
+
+        // A0_inc controls the step amount in the X axis, we are doing 4px at a time so multiply our dY by 4
+        const __m128 A0_inc = _mm_mul_ps(a0, _mm_set1_ps(4.0f)); // a0 * 4
+        const __m128 A1_inc = _mm_mul_ps(a1, _mm_set1_ps(4.0f));
+        const __m128 A2_inc = _mm_mul_ps(a2, _mm_set1_ps(4.0f));
+
+        // Generate masks used for tie-breaking rules (not to double-shade along shared edges)
+        // there is no _mm_cmpge_ps, so use lt and swap operands
+        // _mm_cmplt_ps(bb0Inc, _mm_setzero_ps()) - becomes - _mm_cmplt_ps(_mm_setzero_ps(), bb0Inc)
+        const __m128 Edge0TieBreak = _mm_or_ps(_mm_cmpgt_ps(A0_inc, _mm_setzero_ps()),
+                                               _mm_and_ps(_mm_cmplt_ps(_mm_setzero_ps(), B0_inc), _mm_cmpeq_ps(A0_inc, _mm_setzero_ps())));
+
+        const __m128 Edge1TieBreak = _mm_or_ps(_mm_cmpgt_ps(A1_inc, _mm_setzero_ps()),
+                                               _mm_and_ps(_mm_cmplt_ps(_mm_setzero_ps(), B1_inc), _mm_cmpeq_ps(A1_inc, _mm_setzero_ps())));
+
+        const __m128 Edge2TieBreak = _mm_or_ps(_mm_cmpgt_ps(A2_inc, _mm_setzero_ps()),
+                                               _mm_and_ps(_mm_cmplt_ps(_mm_setzero_ps(), B2_inc), _mm_cmpeq_ps(A2_inc, _mm_setzero_ps())));
+
+        __m128 Zstep = _mm_mul_ps(A1_inc, Z[1]);
+        Zstep        = _mm_add_ps(Zstep, _mm_mul_ps(A2_inc, Z[2]));
+
+        // Incrementally compute Fab(x, y) for all the pixels inside the bounding box formed by (startX, endX) and (startY, endY)
+        for (size_t pix_y = startYy; pix_y <= endYy; ++pix_y,
+                    E0    = _mm_add_ps(E0, B0_inc),
+                    E1    = _mm_add_ps(E1, B1_inc),
+                    E2    = _mm_add_ps(E2, B2_inc))
+        {
+            // Compute barycentric coordinates
+            __m128 alpha = E0;
+            __m128 betaa = E1;
+            __m128 gamaa = E2;
+
+            __m128 depth = Z[0];
+            depth        = _mm_add_ps(depth, _mm_mul_ps(betaa, Z[1]));
+            depth        = _mm_add_ps(depth, _mm_mul_ps(gamaa, Z[2]));
+
+            for (size_t pix_x = startXx; pix_x <= endXx; pix_x += 4,
+                        alpha = _mm_add_ps(alpha, A0_inc),
+                        betaa = _mm_add_ps(betaa, A1_inc),
+                        gamaa = _mm_add_ps(gamaa, A2_inc),
+                        depth = _mm_add_ps(depth, Zstep))
+            {
+                // Test Pixel inside triangle
+                const __m128 Edge0Positive = _mm_cmpgt_ps(alpha, _mm_setzero_ps());
+                const __m128 Edge0Negative = _mm_cmplt_ps(alpha, _mm_setzero_ps());
+                const __m128 Edge0FuncMask = _mm_or_ps(Edge0Positive,
+                                                       _mm_andnot_ps(Edge0Negative, Edge0TieBreak));
+
+                // Edge 1 test
+                const __m128 Edge1Positive = _mm_cmpgt_ps(betaa, _mm_setzero_ps());
+                const __m128 Edge1Negative = _mm_cmplt_ps(betaa, _mm_setzero_ps());
+                const __m128 Edge1FuncMask = _mm_or_ps(Edge1Positive,
+                                                       _mm_andnot_ps(Edge1Negative, Edge1TieBreak));
+
+                // Edge 2 test
+                const __m128 Edge2Positive = _mm_cmpgt_ps(gamaa, _mm_setzero_ps());
+                const __m128 Edge2Negative = _mm_cmplt_ps(gamaa, _mm_setzero_ps());
+                const __m128 Edge2FuncMask = _mm_or_ps(Edge2Positive,
+                                                       _mm_andnot_ps(Edge2Negative, Edge2TieBreak));
+
+                // Combine resulting masks of all three edges
+                __m128 mask = _mm_and_ps(Edge0FuncMask, _mm_and_ps(Edge1FuncMask, Edge2FuncMask));
+
+                /* Check if pixel is inside the triangle */
+                // const __m128i or_mask = _mm_or_si128(_mm_or_si128(alpha, betaa), gamaa);
+                //__m128i       mask    = _mm_cmpgt_epi32(or_mask, _mm_setzero_si128());
+
+#if 1
+                const uint16_t maskInt = (uint16_t)_mm_movemask_ps(mask);
+                if (maskInt == 0x0)
+                    continue;
+#else
+                if (_mm_test_all_zeros(mask, mask))
+                    continue;
+#endif
+
+                const size_t index        = pix_y * IMAGE_W + pix_x;
+                float *const pDepthBuffer = &RenderState.depth_buffer[index];
+
+                const __m128 previousDepthValue = _mm_loadu_ps(pDepthBuffer);
+                const __m128 sseDepthRes        = _mm_cmplt_ps(depth, previousDepthValue);
+
+                if ((uint16_t)_mm_movemask_ps(sseDepthRes) == 0x0)
+                    continue;
+
+                const __m128 sseWriteMask = _mm_and_ps(sseDepthRes, mask);
+
+                const __m128 finaldepth = _mm_blendv_ps(previousDepthValue, depth, sseWriteMask);
+                _mm_store_ps(pDepthBuffer, finaldepth);
+
+                __m128 maskNaN = _mm_cmpunord_ps(mask, mask);                     // Check for NaN values in the vector
+                mask           = _mm_blendv_ps(mask, _mm_set1_ps(1.0f), maskNaN); // Use a blend operation to replace NaN values with 1.0f
+
+                /* Barycentric Weights */
+                const __m128 w0 = _mm_mul_ps(alpha, inv_area);
+                const __m128 w1 = _mm_mul_ps(betaa, inv_area);
+                const __m128 w2 = _mm_mul_ps(gamaa, inv_area);
+
+                __m128 intrFactor = _mm_add_ps(_mm_add_ps(_mm_mul_ps(W[0], w0), _mm_mul_ps(W[1], w1)), _mm_mul_ps(W[2], w2));
+                intrFactor        = _mm_rcp_ps(intrFactor);
+                intrFactor        = _mm_mul_ps(intrFactor, mask); // Picking out only the pixels we are interested in
+
+                InterpolatedPixel_t res;
+                Inpterpolate_Attribute(collected_raster_data[lane].varying, &res, W, w0, w1, w2, intrFactor);
+
+                uint8_t frag_colour[4][4] = {0};
+                for (int i = 0; i < 4; i++)
+                    FRAGMENT_SHADER(&res, i, &RenderState.data_from_vertex_shader, frag_colour[i]);
+
+                // Dont even ask about this pixel format
+                const __m128i combined_colours = _mm_set_epi8(frag_colour[3][3], frag_colour[3][0], frag_colour[3][1], frag_colour[3][2],
+                                                              frag_colour[2][3], frag_colour[2][0], frag_colour[2][1], frag_colour[2][2],
+                                                              frag_colour[1][3], frag_colour[1][0], frag_colour[1][1], frag_colour[1][2],
+                                                              frag_colour[0][3], frag_colour[0][0], frag_colour[0][1], frag_colour[0][2]);
 
                 uint8_t *const pixel_location = &RenderState.colour_buffer[index * IMAGE_BPP];
 
@@ -419,7 +704,7 @@ void Raster_Triangles_MT(void)
     // rd.number_of_triangles         = Trianges_To_Be_Rastered_Counter;
 
     const size_t tmp = Trianges_To_Be_Rastered_Counter / 4;
-    job_t        job = {Raster_Triangles, (void *)&rd};
+    job_t        job = {Raster_Trianglesf, (void *)&rd};
 
     for (size_t i = 0; i < tmp; i++)
         job_submit(job);
